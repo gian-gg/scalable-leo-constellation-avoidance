@@ -73,4 +73,7 @@ catalog inputs, propagation window, candidate values, deterministic seeds, and
 passing thresholds that will be used to select `k` and the decision interval
 before MAPPO training. Its strict catalog loader now validates two-line and
 three-line TLE input, records NORAD IDs and UTC epochs, applies the configured
-freshness cutoff, and joins optional object metadata.
+freshness cutoff, and joins optional object metadata. Validated calibration data
+models provide SI-unit Cartesian frames, deterministic agent selections,
+ID-based conjunctions and neighbor rankings, combination metrics, and final
+recommendations without coupling reference results to the runtime safety model.

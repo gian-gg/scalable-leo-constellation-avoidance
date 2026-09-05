@@ -50,6 +50,40 @@ payload may be an agent candidate. A TLE without metadata is retained as an
 unknown, non-agent object with `default_radius_meters`. Display names use
 metadata first, then the TLE name, then `NORAD-<id>`.
 
+## Calibration data records
+
+The public records in `orbitzoo.thesis.calibration` define the boundaries
+between catalog loading, propagation, selection, screening, measurement, and
+recommendation:
+
+| Record | Purpose |
+|---|---|
+| `CatalogObject` | Validated TLE and joined metadata for one NORAD ID |
+| `CartesianStateFrame` | All retained Cartesian states at one UTC epoch |
+| `AgentSelection` | Deterministic agent population for one seed |
+| `ReferenceConjunction` | Propagated closest approach for one canonical ID pair |
+| `RankedNeighbor` | One agent-neighbor threat rank at a decision epoch |
+| `CombinationMetrics` | Counts and runtime for one population, seed, `k`, and delta-t |
+| `CalibrationRecommendation` | Selected pair, thresholds, pass status, and supporting metrics |
+
+Cartesian frames store positions in metres and velocities in metres per second
+as finite, read-only `float64` arrays with shape `(object_count, 3)`. Calibration
+records are never normalized; conversion to normalized `float32` values happens
+only when observations are encoded for the policy. All record field names carry
+their units (`_m`, `_meters`, `_mps`, or `_seconds`), and every epoch is
+normalized to UTC.
+
+NORAD IDs, rather than display names, connect records. Conjunction IDs must be
+in ascending order so a pair has only one representation. Recall and timely
+detection fractions are derived from integer counts, and a sample containing no
+reference conjunctions receives zero rather than a vacuous passing score.
+Recommendation pass status is derived by pooling the integer event counts across
+its metric rows, so it cannot contradict the stored evidence. Timely counts are
+produced using the recommendation's `minimum_decisions_before_tca` threshold.
+Ranked-neighbor records are designed to be streamed into metric accumulation;
+persisting every decision is optional diagnostic output rather than a pipeline
+requirement.
+
 ## Propagation start
 
 `start_epoch_mode` is `latest_tle_epoch`. The catalog loader exposes the latest

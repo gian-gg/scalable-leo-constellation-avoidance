@@ -5,7 +5,6 @@ from __future__ import annotations
 import csv
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from enum import Enum
 import math
 from pathlib import Path
 from typing import Iterator
@@ -16,46 +15,11 @@ from sgp4.earth_gravity import wgs72
 from sgp4.io import twoline2rv, verify_checksum
 
 from orbitzoo.thesis.calibration.config import CalibrationConfig, CatalogConfig
+from orbitzoo.thesis.calibration.models import CatalogObject, LoadedCatalog, ObjectType
 
 
 class CatalogLoadError(ValueError):
     """Raised when catalog input cannot be loaded without ambiguity."""
-
-
-class ObjectType(str, Enum):
-    """Supported catalog object classifications."""
-
-    PAYLOAD = "payload"
-    ROCKET_BODY = "rocket_body"
-    DEBRIS = "debris"
-    UNKNOWN = "unknown"
-
-
-@dataclass(frozen=True)
-class CatalogObject:
-    """One validated TLE joined with optional project metadata."""
-
-    norad_id: int
-    name: str
-    tle_name: str | None
-    line1: str
-    line2: str
-    tle_epoch_utc: datetime
-    object_type: ObjectType
-    is_agent_candidate: bool
-    radius_meters: float
-    constellation: str | None
-    has_metadata: bool
-
-
-@dataclass(frozen=True)
-class LoadedCatalog:
-    """Retained catalog objects and freshness-filter audit information."""
-
-    objects: tuple[CatalogObject, ...]
-    latest_epoch_utc: datetime
-    source_record_count: int
-    stale_filtered_norad_ids: tuple[int, ...]
 
 
 @dataclass(frozen=True)
