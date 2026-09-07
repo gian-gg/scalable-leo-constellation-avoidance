@@ -63,6 +63,7 @@ recommendation:
 | `EncounterWindow` | Merged coarse candidate interval for one object pair |
 | `FineEncounterTrajectory` | Fine pair states inside one encounter window |
 | `AgentSelection` | Deterministic agent population for one seed |
+| `AgentSelectionManifest` | Versioned calibration and validation selections |
 | `ReferenceConjunction` | Propagated closest approach for one canonical ID pair |
 | `RankedNeighbor` | One agent-neighbor threat rank at a decision epoch |
 | `CombinationMetrics` | Counts and runtime for one population, seed, `k`, and delta-t |
@@ -154,6 +155,34 @@ small. With the default values, the full catalog has 1,441 coarse frames instead
 of 8,641 fine frames. Fine work then depends only on the number and duration of
 candidate encounter windows.
 
+## Deterministic agent selection
+
+Agent populations are selected only after TLE freshness and start-epoch altitude
+filtering. The eligible pool contains every propagated object whose metadata has
+`is_agent_candidate=true`; `constellation` remains descriptive and does not add
+another eligibility filter.
+
+`select_agent_populations` sorts eligible NORAD IDs before randomization, then
+uses an explicit NumPy `PCG64` generator for each configured seed. Each seed
+creates one permutation and all population sizes are prefixes of it:
+
+```text
+16 agents  = permutation[:16]
+64 agents  = permutation[:64]
+256 agents = permutation[:256]
+```
+
+This makes the smaller scenario an exact ordered subset of every larger one.
+The same catalog epoch, configuration, and seed reproduce the same IDs even if
+the source TLE order changes. Selection stops before calibration if the
+post-filter pool cannot satisfy the largest configured population.
+
+`save_agent_selections` writes a deterministic, schema-versioned JSON manifest
+containing the catalog epoch, sorted eligible IDs, RNG algorithm, and every
+calibration and validation selection. `load_agent_selections` validates the
+saved IDs, disjoint seed groups, consistent population sizes, and nesting before
+returning the manifest.
+
 ## Default sweep
 
 The first calibration evaluates agent populations of 16, 64, and 256; neighbor
@@ -188,12 +217,16 @@ from orbitzoo.thesis.calibration import (
     CalibrationConfig,
     build_two_resolution_propagation,
     load_catalog,
+    save_agent_selections,
+    select_agent_populations,
 )
 
 path = "configs/k_dt_calibration.json"
 config = CalibrationConfig.load(path)
 catalog = load_catalog(config, path)
 propagation = build_two_resolution_propagation(catalog, config)
+selections = select_agent_populations(propagation.coarse_propagation, config)
+save_agent_selections(selections, "runs/calibration/agent_selections.json")
 windows = propagation.discover_encounter_windows()
 
 for trajectory in propagation.iter_fine_trajectories(windows):

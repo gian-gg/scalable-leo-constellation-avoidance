@@ -13,6 +13,7 @@ from orbitzoo.thesis.calibration.catalog import (
 )
 from orbitzoo.thesis.calibration.models import (
     AgentSelection,
+    AgentSelectionManifest,
     CalibrationRecommendation,
     CartesianStateFrame,
     CatalogObject,
@@ -35,9 +36,15 @@ from orbitzoo.thesis.calibration.two_resolution import (
     TwoResolutionPropagation,
     build_two_resolution_propagation,
 )
+from orbitzoo.thesis.calibration.selection import (
+    load_agent_selections,
+    save_agent_selections,
+    select_agent_populations,
+)
 
 __all__ = [
     "AgentSelection",
+    "AgentSelectionManifest",
     "CalibrationConfig",
     "CalibrationRecommendation",
     "CatalogLoadError",
@@ -60,6 +67,9 @@ __all__ = [
     "TwoResolutionPropagation",
     "build_two_resolution_propagation",
     "load_catalog",
+    "load_agent_selections",
     "propagate_catalog",
     "propagate_objects",
+    "save_agent_selections",
+    "select_agent_populations",
 ]

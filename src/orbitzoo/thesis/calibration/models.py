@@ -247,6 +247,97 @@ class AgentSelection:
 
 
 @dataclass(frozen=True)
+class AgentSelectionManifest:
+    """Versioned calibration and validation selections for one catalog epoch."""
+
+    catalog_epoch_utc: datetime
+    eligible_norad_ids: tuple[int, ...]
+    calibration_selections: tuple[AgentSelection, ...]
+    validation_selections: tuple[AgentSelection, ...]
+    rng_algorithm: str = "PCG64"
+    schema_version: int = 1
+
+    def __post_init__(self) -> None:
+        if self.schema_version != 1:
+            raise ValueError("unsupported agent-selection schema version")
+        if self.rng_algorithm != "PCG64":
+            raise ValueError("agent selections must use the PCG64 RNG")
+        eligible_ids = _norad_ids(
+            "eligible_norad_ids",
+            tuple(self.eligible_norad_ids),
+        )
+        if not eligible_ids:
+            raise ValueError("eligible_norad_ids cannot be empty")
+        if eligible_ids != tuple(sorted(eligible_ids)):
+            raise ValueError("eligible_norad_ids must be sorted")
+        calibration = tuple(self.calibration_selections)
+        validation = tuple(self.validation_selections)
+        calibration_counts, calibration_seeds = self._validate_group(
+            "calibration",
+            calibration,
+            set(eligible_ids),
+        )
+        validation_counts, validation_seeds = self._validate_group(
+            "validation",
+            validation,
+            set(eligible_ids),
+        )
+        if calibration_counts != validation_counts:
+            raise ValueError("calibration and validation must use the same agent counts")
+        overlap = calibration_seeds.intersection(validation_seeds)
+        if overlap:
+            raise ValueError(
+                f"calibration and validation seeds must be disjoint: {sorted(overlap)}"
+            )
+        object.__setattr__(
+            self,
+            "catalog_epoch_utc",
+            _utc("catalog_epoch_utc", self.catalog_epoch_utc),
+        )
+        object.__setattr__(self, "eligible_norad_ids", eligible_ids)
+        object.__setattr__(self, "calibration_selections", calibration)
+        object.__setattr__(self, "validation_selections", validation)
+
+    @staticmethod
+    def _validate_group(
+        name: str,
+        selections: tuple[AgentSelection, ...],
+        eligible_ids: set[int],
+    ) -> tuple[tuple[int, ...], set[int]]:
+        if not selections:
+            raise ValueError(f"{name}_selections cannot be empty")
+        by_seed: dict[int, list[AgentSelection]] = {}
+        seen_samples: set[tuple[int, int]] = set()
+        for selection in selections:
+            sample = selection.seed, selection.requested_agent_count
+            if sample in seen_samples:
+                raise ValueError(f"duplicate {name} selection for {sample}")
+            seen_samples.add(sample)
+            if not set(selection.agent_norad_ids).issubset(eligible_ids):
+                raise ValueError(f"{name} selection contains an ineligible NORAD ID")
+            by_seed.setdefault(selection.seed, []).append(selection)
+
+        expected_counts: tuple[int, ...] | None = None
+        for seed, seed_selections in by_seed.items():
+            ordered = sorted(
+                seed_selections,
+                key=lambda item: item.requested_agent_count,
+            )
+            counts = tuple(item.requested_agent_count for item in ordered)
+            if expected_counts is None:
+                expected_counts = counts
+            elif counts != expected_counts:
+                raise ValueError(f"every {name} seed must use the same agent counts")
+            for smaller, larger in zip(ordered, ordered[1:]):
+                if (
+                    larger.agent_norad_ids[: smaller.requested_agent_count]
+                    != smaller.agent_norad_ids
+                ):
+                    raise ValueError(f"{name} selections must be nested for seed {seed}")
+        return expected_counts or (), set(by_seed)
+
+
+@dataclass(frozen=True)
 class ReferenceConjunction:
     """One propagated reference conjunction between a canonical object pair."""
 

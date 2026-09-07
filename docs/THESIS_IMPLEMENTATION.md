@@ -82,3 +82,8 @@ full-catalog 60-second spatial-index pass, merges conservative candidate
 encounter windows, and produces 10-second SGP4 TEME states only for the involved
 pairs. This avoids computing a full day of 10-second catalog states while
 preserving SI units and deterministic ordering.
+
+Agent population selection now operates on the post-altitude-filter payload
+pool. Explicit PCG64 permutations make the 16-, 64-, and 256-agent populations
+nested and reproducible for every calibration and validation seed, with the
+selected NORAD IDs stored in a validated versioned manifest.
