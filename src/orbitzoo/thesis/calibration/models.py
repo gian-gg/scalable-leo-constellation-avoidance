@@ -427,6 +427,98 @@ class ReferenceConjunction:
             _utc("tca_epoch_utc", self.tca_epoch_utc),
         )
 
+    @property
+    def is_collision(self) -> bool:
+        """Whether the closest approach penetrates the combined object radii."""
+        return self.miss_distance_meters <= self.combined_radius_meters
+
+
+@dataclass(frozen=True)
+class ReferenceConjunctionManifest:
+    """Versioned unsafe conjunction truth for one calibration catalog."""
+
+    catalog_epoch_utc: datetime
+    safe_separation_meters: float
+    reference_step_seconds: int
+    screened_agent_norad_ids: tuple[int, ...]
+    conjunctions: tuple[ReferenceConjunction, ...]
+    schema_version: int = 1
+
+    def __post_init__(self) -> None:
+        if self.schema_version != 1:
+            raise ValueError("unsupported reference-conjunction schema version")
+        catalog_epoch = _utc("catalog_epoch_utc", self.catalog_epoch_utc)
+        _finite_positive("safe_separation_meters", self.safe_separation_meters)
+        _positive_integer("reference_step_seconds", self.reference_step_seconds)
+        agent_ids = _norad_ids(
+            "screened_agent_norad_ids",
+            tuple(self.screened_agent_norad_ids),
+        )
+        if not agent_ids:
+            raise ValueError("screened_agent_norad_ids cannot be empty")
+        if agent_ids != tuple(sorted(agent_ids)):
+            raise ValueError("screened_agent_norad_ids must be sorted")
+
+        conjunctions = tuple(self.conjunctions)
+        expected_order = tuple(
+            sorted(
+                conjunctions,
+                key=lambda item: (
+                    item.tca_epoch_utc,
+                    item.first_norad_id,
+                    item.second_norad_id,
+                ),
+            )
+        )
+        if conjunctions != expected_order:
+            raise ValueError("conjunctions must be deterministically sorted")
+        if len(conjunctions) != len(set(conjunctions)):
+            raise ValueError("conjunctions cannot contain duplicate events")
+        agent_id_set = set(agent_ids)
+        for conjunction in conjunctions:
+            if conjunction.tca_epoch_utc < catalog_epoch:
+                raise ValueError("reference conjunction cannot precede catalog epoch")
+            if conjunction.miss_distance_meters > self.safe_separation_meters:
+                raise ValueError("reference conjunctions must violate safe separation")
+            if (
+                conjunction.first_norad_id not in agent_id_set
+                and conjunction.second_norad_id not in agent_id_set
+            ):
+                raise ValueError(
+                    "every reference conjunction must contain a screened agent"
+                )
+
+        object.__setattr__(
+            self,
+            "catalog_epoch_utc",
+            catalog_epoch,
+        )
+        object.__setattr__(self, "screened_agent_norad_ids", agent_ids)
+        object.__setattr__(self, "conjunctions", conjunctions)
+
+    @property
+    def collision_count(self) -> int:
+        return sum(conjunction.is_collision for conjunction in self.conjunctions)
+
+    def conjunctions_for(
+        self,
+        selection: AgentSelection,
+    ) -> tuple[ReferenceConjunction, ...]:
+        """Return truth events affecting one nested agent population."""
+        selected_ids = set(selection.agent_norad_ids)
+        unknown_ids = selected_ids.difference(self.screened_agent_norad_ids)
+        if unknown_ids:
+            raise ValueError(
+                "selection contains NORAD IDs absent from the reference pass: "
+                f"{sorted(unknown_ids)}"
+            )
+        return tuple(
+            conjunction
+            for conjunction in self.conjunctions
+            if conjunction.first_norad_id in selected_ids
+            or conjunction.second_norad_id in selected_ids
+        )
+
 
 @dataclass(frozen=True)
 class RankedNeighbor:

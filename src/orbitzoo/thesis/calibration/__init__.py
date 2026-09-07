@@ -26,6 +26,7 @@ from orbitzoo.thesis.calibration.models import (
     ObjectType,
     RankedNeighbor,
     ReferenceConjunction,
+    ReferenceConjunctionManifest,
 )
 from orbitzoo.thesis.calibration.propagation import (
     PropagationError,
@@ -41,6 +42,11 @@ from orbitzoo.thesis.calibration.selection import (
     load_agent_selections,
     save_agent_selections,
     select_agent_populations,
+)
+from orbitzoo.thesis.calibration.reference import (
+    generate_reference_conjunctions,
+    load_reference_conjunctions,
+    save_reference_conjunctions,
 )
 
 __all__ = [
@@ -64,14 +70,18 @@ __all__ = [
     "PropagationError",
     "RankedNeighbor",
     "ReferenceConjunction",
+    "ReferenceConjunctionManifest",
     "SweepConfig",
     "SGP4Propagation",
     "TwoResolutionPropagation",
     "build_two_resolution_propagation",
     "load_catalog",
     "load_agent_selections",
+    "load_reference_conjunctions",
     "propagate_catalog",
     "propagate_objects",
     "save_agent_selections",
+    "save_reference_conjunctions",
     "select_agent_populations",
+    "generate_reference_conjunctions",
 ]

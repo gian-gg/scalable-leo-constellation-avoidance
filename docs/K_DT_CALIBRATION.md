@@ -65,6 +65,7 @@ recommendation:
 | `AgentSelection` | Deterministic agent population for one seed |
 | `AgentSelectionManifest` | Versioned calibration and validation selections |
 | `ReferenceConjunction` | Propagated closest approach for one canonical ID pair |
+| `ReferenceConjunctionManifest` | Versioned fine-pass conjunction truth |
 | `RankedNeighbor` | One agent-neighbor threat rank at a decision epoch |
 | `CombinationMetrics` | Counts and runtime for one population, seed, `k`, and delta-t |
 | `CalibrationRecommendation` | Selected pair, thresholds, pass status, and supporting metrics |
@@ -165,6 +166,27 @@ so the catalog does not need to be propagated and spatially queried again for
 the 16- and 64-agent prefixes. This path does not use the environment's Python
 all-pairs conjunction implementation.
 
+## Reference conjunction generation
+
+`generate_reference_conjunctions` converts the pair-only fine trajectories into
+the reference events used to measure neighborhood recall. Within every
+fine-resolution interval it computes a bounded linear closest-approach time from
+the relative TEME position and velocity. This captures a closest approach that
+falls between the 10-second SGP4 samples instead of rounding it to a frame.
+
+Coarse candidates whose refined miss distance exceeds
+`safe_separation_meters` are discarded. Retained records contain canonical
+NORAD IDs, UTC TCA, miss distance, relative speed, and the combined metadata
+radii in SI units. `ReferenceConjunction.is_collision` is derived by comparing
+miss distance with the combined radii. Overlapping windows for the same pair
+form one event, while non-overlapping later encounters remain separate.
+
+The versioned `ReferenceConjunctionManifest` records the catalog epoch,
+reference timestep, safety threshold, and screened agent IDs. Its
+`conjunctions_for(selection)` method associates the shared reference pass with
+each nested population. The manifest can be saved and loaded as deterministic
+JSON for the later `(k, delta t)` sweep.
+
 ## Deterministic agent selection
 
 Agent populations are selected only after TLE freshness and start-epoch altitude
@@ -226,8 +248,10 @@ The equivalent Python API is:
 from orbitzoo.thesis.calibration import (
     CalibrationConfig,
     build_two_resolution_propagation,
+    generate_reference_conjunctions,
     load_catalog,
     save_agent_selections,
+    save_reference_conjunctions,
     select_agent_populations,
 )
 
@@ -243,10 +267,19 @@ for selection in selections.calibration_selections:
     windows = screening.windows_for(selection)
     print(selection.seed, selection.requested_agent_count, len(windows))
 
-for trajectory in propagation.iter_fine_trajectories(
-    screening.encounter_windows
-):
-    print(trajectory.window, len(trajectory.frames))
+references = generate_reference_conjunctions(
+    propagation.iter_fine_trajectories(screening.encounter_windows),
+    catalog,
+    config,
+    screened_agent_norad_ids=screening.screened_agent_norad_ids,
+)
+save_reference_conjunctions(
+    references,
+    "runs/calibration/reference_conjunctions.json",
+)
+
+for conjunction in references.conjunctions:
+    print(conjunction.tca_epoch_utc, conjunction.miss_distance_meters)
 ```
 
 Saving a configuration validates it and emits deterministic, sorted JSON. The

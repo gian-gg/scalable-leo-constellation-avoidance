@@ -91,3 +91,8 @@ nested and reproducible for every calibration and validation seed, with the
 selected NORAD IDs stored in a validated versioned manifest.
 The largest nested populations across all seeds can be screened once, and each
 smaller population reuses the resulting windows through an ID-based filter.
+Fine pair trajectories are converted into versioned reference conjunction
+truth using bounded TCA refinement between 10-second samples. Coarse false
+positives are removed at the configured safe separation, collision status is
+derived from catalog radii, overlapping detections are deduplicated, and nested
+agent selections reuse the shared truth through deterministic ID filtering.
