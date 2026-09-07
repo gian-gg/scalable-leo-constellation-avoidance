@@ -560,6 +560,64 @@ class RankedNeighbor:
 
 
 @dataclass(frozen=True)
+class RankedNeighborFrame:
+    """Top ranked catalog neighbors for selected agents at one epoch."""
+
+    decision_epoch_utc: datetime
+    agent_norad_ids: tuple[int, ...]
+    rankings: tuple[RankedNeighbor, ...]
+
+    def __post_init__(self) -> None:
+        epoch = _utc("decision_epoch_utc", self.decision_epoch_utc)
+        agent_ids = _norad_ids("agent_norad_ids", tuple(self.agent_norad_ids))
+        if not agent_ids:
+            raise ValueError("agent_norad_ids cannot be empty")
+        if agent_ids != tuple(sorted(agent_ids)):
+            raise ValueError("agent_norad_ids must be sorted")
+        rankings = tuple(self.rankings)
+        expected_order = tuple(
+            sorted(rankings, key=lambda item: (item.agent_norad_id, item.rank))
+        )
+        if rankings != expected_order:
+            raise ValueError("rankings must be ordered by agent NORAD ID and rank")
+        agent_id_set = set(agent_ids)
+        ranks_by_agent: dict[int, list[int]] = {identifier: [] for identifier in agent_ids}
+        for ranking in rankings:
+            if ranking.decision_epoch_utc != epoch:
+                raise ValueError("ranked neighbor epoch does not match its frame")
+            if ranking.agent_norad_id not in agent_id_set:
+                raise ValueError("ranking references an agent absent from its frame")
+            ranks_by_agent[ranking.agent_norad_id].append(ranking.rank)
+        for ranks in ranks_by_agent.values():
+            if ranks != list(range(1, len(ranks) + 1)):
+                raise ValueError("neighbor ranks must be contiguous from one")
+        object.__setattr__(self, "decision_epoch_utc", epoch)
+        object.__setattr__(self, "agent_norad_ids", agent_ids)
+        object.__setattr__(self, "rankings", rankings)
+
+    def rankings_for(
+        self,
+        selection: AgentSelection,
+        neighborhood_size: int,
+    ) -> tuple[RankedNeighbor, ...]:
+        """Reuse this frame for one nested population and candidate k."""
+        _positive_integer("neighborhood_size", neighborhood_size)
+        selected_ids = set(selection.agent_norad_ids)
+        unknown_ids = selected_ids.difference(self.agent_norad_ids)
+        if unknown_ids:
+            raise ValueError(
+                "selection contains NORAD IDs absent from the ranking frame: "
+                f"{sorted(unknown_ids)}"
+            )
+        return tuple(
+            ranking
+            for ranking in self.rankings
+            if ranking.agent_norad_id in selected_ids
+            and ranking.rank <= neighborhood_size
+        )
+
+
+@dataclass(frozen=True)
 class CombinationMetrics:
     """Detection metrics for one k/delta-t combination and sampled population."""
 

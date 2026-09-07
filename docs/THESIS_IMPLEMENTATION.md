@@ -96,3 +96,8 @@ truth using bounded TCA refinement between 10-second samples. Coarse false
 positives are removed at the configured safe separation, collision status is
 derived from catalog radii, overlapping detections are deduplicated, and nested
 agent selections reuse the shared truth through deterministic ID filtering.
+Candidate decision timelines now share one set of propagation epochs. At each
+epoch, vectorized selected-agent-to-catalog calculations produce deterministic
+threat rankings without evaluating irrelevant catalog-only pairs. The maximum
+configured neighborhood is streamed once and filtered for nested populations
+and smaller `k` values.

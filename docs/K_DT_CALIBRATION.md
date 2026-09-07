@@ -67,6 +67,7 @@ recommendation:
 | `ReferenceConjunction` | Propagated closest approach for one canonical ID pair |
 | `ReferenceConjunctionManifest` | Versioned fine-pass conjunction truth |
 | `RankedNeighbor` | One agent-neighbor threat rank at a decision epoch |
+| `RankedNeighborFrame` | Reusable top ranks for all screened agents at one epoch |
 | `CombinationMetrics` | Counts and runtime for one population, seed, `k`, and delta-t |
 | `CalibrationRecommendation` | Selected pair, thresholds, pass status, and supporting metrics |
 
@@ -187,6 +188,29 @@ reference timestep, safety threshold, and screened agent IDs. Its
 each nested population. The manifest can be saved and loaded as deterministic
 JSON for the later `(k, delta t)` sweep.
 
+## Neighbor ranking at decision epochs
+
+`build_decision_schedule` creates a timeline for every candidate decision
+interval. Decision epochs include the propagation start and exclude the terminal
+epoch, where no further action can be taken. Their union is propagated once, so
+the 120-, 300-, and 600-second candidates reuse matching epochs from the
+60-second timeline.
+
+At each shared epoch, `rank_neighbors_at_epoch` compares only selected agents
+against catalog objects. It never creates satellite-debris or debris-debris
+pairs that cannot appear in an actor observation. Agent batches use NumPy
+broadcasting for relative position and velocity, closest-approach time, miss
+distance, combined radius, collision status, and unsafe status. This avoids the
+environment's full Python all-pairs loop while retaining every payload, rocket
+body, debris object, and unknown object as a possible neighbor.
+
+The ranking order matches the actor observation semantics: current collision,
+predicted unsafe encounter, smaller predicted miss distance, earlier TCA, and
+finally NORAD ID. Self-pairs are masked before sorting. Only the largest
+configured `k` is retained per agent; smaller candidate values use
+`RankedNeighborFrame.rankings_for(selection, k)`. Frames are streamed so a
+full-day catalog run does not retain every decision and agent in memory.
+
 ## Deterministic agent selection
 
 Agent populations are selected only after TLE freshness and start-epoch altitude
@@ -247,8 +271,10 @@ The equivalent Python API is:
 ```python
 from orbitzoo.thesis.calibration import (
     CalibrationConfig,
+    build_decision_schedule,
     build_two_resolution_propagation,
     generate_reference_conjunctions,
+    iter_ranked_neighbor_frames,
     load_catalog,
     save_agent_selections,
     save_reference_conjunctions,
@@ -280,6 +306,20 @@ save_reference_conjunctions(
 
 for conjunction in references.conjunctions:
     print(conjunction.tca_epoch_utc, conjunction.miss_distance_meters)
+
+schedule = build_decision_schedule(
+    propagation.coarse_propagation.start_epoch_utc,
+    config,
+)
+selection = selections.calibration_selections[0]
+ranking_frames = iter_ranked_neighbor_frames(
+    propagation.coarse_propagation,
+    config,
+    agent_norad_ids=screening.screened_agent_norad_ids,
+)
+for ranking_frame in ranking_frames:
+    if ranking_frame.decision_epoch_utc in schedule.epochs_for(120):
+        top_four = ranking_frame.rankings_for(selection, 4)
 ```
 
 Saving a configuration validates it and emits deterministic, sorted JSON. The
