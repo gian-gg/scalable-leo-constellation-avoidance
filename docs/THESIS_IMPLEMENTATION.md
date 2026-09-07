@@ -106,3 +106,8 @@ applicable neighborhood prefix and decision schedule simultaneously. It matches
 ranked pairs to future reference events within the screening horizon, records
 first visibility, and derives the number of actionable decisions remaining
 before TCA without rerunning propagation for any `(k, delta t)` combination.
+Detailed detections are aggregated into the complete per-sample combination
+grid, including explicit zero-event cases. Calibration and validation counts
+are pooled separately before recall and timely-detection rates are calculated,
+and versioned passing thresholds produce an auditable result for every
+candidate pair without averaging percentages across unequal samples.

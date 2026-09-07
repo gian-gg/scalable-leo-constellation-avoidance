@@ -744,6 +744,75 @@ class CombinationMetrics:
 
 
 @dataclass(frozen=True)
+class PooledCombinationMetrics:
+    """Count-weighted threshold result for one split and k/delta-t pair."""
+
+    evaluation_split: EvaluationSplit
+    neighborhood_size: int
+    decision_interval_seconds: int
+    sample_count: int
+    reference_conjunction_count: int
+    detected_conjunction_count: int
+    timely_detected_conjunction_count: int
+    runtime_seconds: float
+    minimum_threat_recall: float
+    minimum_timely_detection_fraction: float
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.evaluation_split, EvaluationSplit):
+            raise ValueError("evaluation_split must be an EvaluationSplit")
+        for name in (
+            "neighborhood_size",
+            "decision_interval_seconds",
+            "sample_count",
+        ):
+            _positive_integer(name, getattr(self, name))
+        for name in (
+            "reference_conjunction_count",
+            "detected_conjunction_count",
+            "timely_detected_conjunction_count",
+        ):
+            _nonnegative_integer(name, getattr(self, name))
+        if self.detected_conjunction_count > self.reference_conjunction_count:
+            raise ValueError("detected conjunctions cannot exceed reference conjunctions")
+        if self.timely_detected_conjunction_count > self.detected_conjunction_count:
+            raise ValueError("timely detections cannot exceed detected conjunctions")
+        _finite_nonnegative("runtime_seconds", self.runtime_seconds)
+        for name in (
+            "minimum_threat_recall",
+            "minimum_timely_detection_fraction",
+        ):
+            value = getattr(self, name)
+            if not math.isfinite(value) or not 0.0 <= value <= 1.0:
+                raise ValueError(f"{name} must be finite and in [0, 1]")
+
+    @property
+    def missed_conjunction_count(self) -> int:
+        return self.reference_conjunction_count - self.detected_conjunction_count
+
+    @property
+    def threat_recall(self) -> float:
+        if self.reference_conjunction_count == 0:
+            return 0.0
+        return self.detected_conjunction_count / self.reference_conjunction_count
+
+    @property
+    def timely_detection_fraction(self) -> float:
+        if self.reference_conjunction_count == 0:
+            return 0.0
+        return self.timely_detected_conjunction_count / self.reference_conjunction_count
+
+    @property
+    def passed(self) -> bool:
+        return (
+            self.reference_conjunction_count > 0
+            and self.threat_recall >= self.minimum_threat_recall
+            and self.timely_detection_fraction
+            >= self.minimum_timely_detection_fraction
+        )
+
+
+@dataclass(frozen=True)
 class CalibrationRecommendation:
     """Final selected parameters with calibration and validation evidence."""
 

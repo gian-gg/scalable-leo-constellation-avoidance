@@ -24,6 +24,7 @@ from orbitzoo.thesis.calibration.models import (
     FineEncounterTrajectory,
     LoadedCatalog,
     ObjectType,
+    PooledCombinationMetrics,
     RankedNeighbor,
     RankedNeighborFrame,
     ReferenceConjunction,
@@ -57,6 +58,12 @@ from orbitzoo.thesis.calibration.ranking import (
     rank_neighbors_at_epoch,
 )
 from orbitzoo.thesis.calibration.evaluation import evaluate_joint_combinations
+from orbitzoo.thesis.calibration.metrics import (
+    MetricCaseKey,
+    aggregate_and_pool_detections,
+    aggregate_detection_metrics,
+    pool_combination_metrics,
+)
 
 __all__ = [
     "AgentSelection",
@@ -75,6 +82,7 @@ __all__ = [
     "LoadedCatalog",
     "ObjectType",
     "PassingThresholds",
+    "PooledCombinationMetrics",
     "PropagationConfig",
     "PropagationError",
     "RankedNeighbor",
@@ -84,10 +92,13 @@ __all__ = [
     "DecisionSchedule",
     "SweepConfig",
     "ThreatDetection",
+    "MetricCaseKey",
     "SGP4Propagation",
     "TwoResolutionPropagation",
     "build_decision_schedule",
     "build_two_resolution_propagation",
+    "aggregate_and_pool_detections",
+    "aggregate_detection_metrics",
     "evaluate_joint_combinations",
     "generate_reference_conjunctions",
     "iter_ranked_neighbor_frames",
@@ -96,6 +107,7 @@ __all__ = [
     "load_reference_conjunctions",
     "propagate_catalog",
     "propagate_objects",
+    "pool_combination_metrics",
     "rank_neighbors_at_epoch",
     "save_agent_selections",
     "save_reference_conjunctions",

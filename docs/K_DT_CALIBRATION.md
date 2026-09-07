@@ -70,6 +70,7 @@ recommendation:
 | `RankedNeighborFrame` | Reusable top ranks for all screened agents at one epoch |
 | `ThreatDetection` | First visibility and decision lead time for one reference event |
 | `CombinationMetrics` | Counts and runtime for one population, seed, `k`, and delta-t |
+| `PooledCombinationMetrics` | Count-weighted pass result for one split and pair |
 | `CalibrationRecommendation` | Selected pair, thresholds, pass status, and supporting metrics |
 
 Cartesian frames store positions in metres and velocities in metres per second
@@ -234,6 +235,27 @@ count is `ceil((TCA - first_visible) / delta_t)`, and timely status is derived
 from the configured minimum. The evaluator verifies that every shared epoch is
 present exactly once and that ranking frames retain the largest candidate `k`.
 
+## Metrics and passing thresholds
+
+`aggregate_detection_metrics` groups the event evidence by split, seed, agent
+count, `k`, and `delta t`. It emits the complete configured grid, including
+explicit zero-count rows for samples with no reference conjunctions. It also
+verifies that every combination within a sample contains the same reference
+events, preventing missing evaluator output from being mistaken for perfect
+detection or an empty scenario.
+
+Each `CombinationMetrics` row derives missed events, threat recall, and timely
+detection fraction from integer counts. Optional per-case runtimes can be
+attached without changing the detection results. `pool_combination_metrics`
+then sums counts across seeds and agent populations before calculating rates;
+it never averages percentages from differently sized samples.
+
+`PooledCombinationMetrics.passed` applies the versioned minimum recall and
+timely-detection thresholds separately to calibration and validation. A pooled
+case with no reference events reports both rates as zero and cannot pass, even
+if thresholds were configured as zero. Final parameter selection remains a
+separate phase so validation evidence cannot influence the calibration search.
+
 ## Deterministic agent selection
 
 Agent populations are selected only after TLE freshness and start-epoch altitude
@@ -294,6 +316,7 @@ The equivalent Python API is:
 ```python
 from orbitzoo.thesis.calibration import (
     CalibrationConfig,
+    aggregate_and_pool_detections,
     build_decision_schedule,
     build_two_resolution_propagation,
     evaluate_joint_combinations,
@@ -349,6 +372,20 @@ detections = evaluate_joint_combinations(
 )
 for detection in detections:
     print(detection.detected, detection.decisions_remaining)
+
+metrics, pooled_results = aggregate_and_pool_detections(
+    detections,
+    config,
+)
+for result in pooled_results:
+    print(
+        result.evaluation_split.value,
+        result.neighborhood_size,
+        result.decision_interval_seconds,
+        result.threat_recall,
+        result.timely_detection_fraction,
+        result.passed,
+    )
 ```
 
 Saving a configuration validates it and emits deterministic, sorted JSON. The
