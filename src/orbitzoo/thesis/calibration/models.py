@@ -338,6 +338,68 @@ class AgentSelectionManifest:
 
 
 @dataclass(frozen=True)
+class CandidateScreeningResult:
+    """Coarse encounter windows found for an explicit set of selected agents."""
+
+    screened_agent_norad_ids: tuple[int, ...]
+    encounter_windows: tuple[EncounterWindow, ...]
+
+    def __post_init__(self) -> None:
+        agent_ids = _norad_ids(
+            "screened_agent_norad_ids",
+            tuple(self.screened_agent_norad_ids),
+        )
+        if not agent_ids:
+            raise ValueError("screened_agent_norad_ids cannot be empty")
+        if agent_ids != tuple(sorted(agent_ids)):
+            raise ValueError("screened_agent_norad_ids must be sorted")
+
+        windows = tuple(self.encounter_windows)
+        agent_id_set = set(agent_ids)
+        previous_key: tuple[datetime, int, int] | None = None
+        for window in windows:
+            if (
+                window.first_norad_id not in agent_id_set
+                and window.second_norad_id not in agent_id_set
+            ):
+                raise ValueError(
+                    "every encounter window must contain a screened agent"
+                )
+            key = (
+                window.start_epoch_utc,
+                window.first_norad_id,
+                window.second_norad_id,
+            )
+            if previous_key is not None and key <= previous_key:
+                raise ValueError(
+                    "encounter_windows must be unique and deterministically sorted"
+                )
+            previous_key = key
+
+        object.__setattr__(self, "screened_agent_norad_ids", agent_ids)
+        object.__setattr__(self, "encounter_windows", windows)
+
+    def windows_for(
+        self,
+        selection: AgentSelection,
+    ) -> tuple[EncounterWindow, ...]:
+        """Reuse this pass for one nested population without rescreening."""
+        selected_ids = set(selection.agent_norad_ids)
+        unknown_ids = selected_ids.difference(self.screened_agent_norad_ids)
+        if unknown_ids:
+            raise ValueError(
+                "selection contains NORAD IDs absent from the screening pass: "
+                f"{sorted(unknown_ids)}"
+            )
+        return tuple(
+            window
+            for window in self.encounter_windows
+            if window.first_norad_id in selected_ids
+            or window.second_norad_id in selected_ids
+        )
+
+
+@dataclass(frozen=True)
 class ReferenceConjunction:
     """One propagated reference conjunction between a canonical object pair."""
 

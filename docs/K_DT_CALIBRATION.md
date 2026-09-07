@@ -126,10 +126,12 @@ the same trajectory. This phase performs no maneuvers.
 `build_two_resolution_propagation` performs the production calibration pass:
 
 1. It propagates every altitude-filtered object at `coarse_step_seconds`.
-2. At each coarse frame, a `cKDTree` spatial index finds nearby pairs without an
-   all-pairs distance matrix.
-3. Only pairs containing at least one metadata-approved agent candidate are
-   retained, because other pairs cannot affect an actor's neighborhood recall.
+2. At each coarse frame, a `cKDTree` indexes every catalog object, but
+   `query_ball_point` is called only for explicitly selected agent positions.
+   Catalog-only pairs are therefore never generated or filtered after the fact.
+3. Self-pairs are excluded. Pairs between two selected agents are converted to
+   canonical NORAD-ID order and deduplicated, while payloads, rocket bodies,
+   debris, and unknown objects all remain possible threats to an agent.
 4. Candidate intervals receive `fine_window_padding_seconds` on both sides and
    overlapping intervals for the same canonical NORAD pair are merged.
 5. Only the two objects in each merged interval are propagated at
@@ -154,6 +156,14 @@ below the configured relative-speed bound; calibration stops if the bound is too
 small. With the default values, the full catalog has 1,441 coarse frames instead
 of 8,641 fine frames. Fine work then depends only on the number and duration of
 candidate encounter windows.
+
+`screen_agent_selections` takes the saved selection manifest and screens the
+union of the largest nested population for every calibration and validation
+seed. The resulting `CandidateScreeningResult` stores that exact agent set.
+Smaller populations call `windows_for(selection)` to filter the saved windows,
+so the catalog does not need to be propagated and spatially queried again for
+the 16- and 64-agent prefixes. This path does not use the environment's Python
+all-pairs conjunction implementation.
 
 ## Deterministic agent selection
 
@@ -227,9 +237,15 @@ catalog = load_catalog(config, path)
 propagation = build_two_resolution_propagation(catalog, config)
 selections = select_agent_populations(propagation.coarse_propagation, config)
 save_agent_selections(selections, "runs/calibration/agent_selections.json")
-windows = propagation.discover_encounter_windows()
+screening = propagation.screen_agent_selections(selections)
 
-for trajectory in propagation.iter_fine_trajectories(windows):
+for selection in selections.calibration_selections:
+    windows = screening.windows_for(selection)
+    print(selection.seed, selection.requested_agent_count, len(windows))
+
+for trajectory in propagation.iter_fine_trajectories(
+    screening.encounter_windows
+):
     print(trajectory.window, len(trajectory.frames))
 ```
 

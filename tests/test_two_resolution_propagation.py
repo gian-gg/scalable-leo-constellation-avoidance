@@ -6,6 +6,8 @@ from sgp4.conveniences import sat_epoch_datetime
 from sgp4.io import fix_checksum
 
 from orbitzoo.thesis.calibration import (
+    AgentSelection,
+    AgentSelectionManifest,
     CalibrationConfig,
     CatalogConfig,
     CatalogObject,
@@ -104,7 +106,7 @@ def test_coarse_candidates_are_merged_then_propagated_as_fine_pairs() -> None:
         batch_size=2,
     )
 
-    windows = propagation.discover_encounter_windows()
+    windows = propagation.discover_encounter_windows((25544,))
 
     assert propagation.coarse_propagation.step_seconds == 60
     assert propagation.coarse_propagation.frame_count == 3
@@ -137,8 +139,8 @@ def test_run_is_deterministic_and_combines_both_passes() -> None:
         _config(),
     )
 
-    first = tuple(propagation.run())
-    second = tuple(propagation.run())
+    first = tuple(propagation.run((25544,)))
+    second = tuple(propagation.run((25544,)))
 
     assert [item.window for item in first] == [item.window for item in second]
     assert [frame.epoch_utc for frame in first[0].frames] == [
@@ -146,14 +148,98 @@ def test_run_is_deterministic_and_combines_both_passes() -> None:
     ]
 
 
-def test_pairs_without_an_agent_candidate_are_not_refined() -> None:
+def test_catalog_only_pairs_are_never_screened() -> None:
     propagation = build_two_resolution_propagation(
-        _catalog(_object(25544), _object(40909)),
+        _catalog(
+            _object(
+                25544,
+                mean_anomaly="265.6398",
+                is_agent_candidate=True,
+            ),
+            _object(40909),
+            _object(43013),
+        ),
         _config(),
     )
 
-    assert propagation.discover_encounter_windows() == ()
-    assert tuple(propagation.run()) == ()
+    assert propagation.discover_encounter_windows((25544,)) == ()
+    assert tuple(propagation.run((25544,))) == ()
+
+
+def test_selected_agent_pairs_are_canonical_and_deduplicated() -> None:
+    propagation = build_two_resolution_propagation(
+        _catalog(
+            _object(25544, is_agent_candidate=True),
+            _object(40909, is_agent_candidate=True),
+        ),
+        _config(),
+    )
+
+    windows = propagation.discover_encounter_windows((40909, 25544))
+
+    assert len(windows) == 1
+    assert (windows[0].first_norad_id, windows[0].second_norad_id) == (
+        25544,
+        40909,
+    )
+    assert windows[0].coarse_detection_count == 2
+
+
+def test_nested_populations_reuse_one_selection_screening_pass() -> None:
+    agents = tuple(
+        _object(norad_id, is_agent_candidate=True)
+        for norad_id in (25544, 40909, 43013, 44001)
+    )
+    propagation = build_two_resolution_propagation(_catalog(*agents), _config())
+    small = AgentSelection(
+        seed=0,
+        requested_agent_count=2,
+        agent_norad_ids=(25544, 40909),
+    )
+    large = AgentSelection(
+        seed=0,
+        requested_agent_count=4,
+        agent_norad_ids=(25544, 40909, 43013, 44001),
+    )
+    validation_small = AgentSelection(
+        seed=100,
+        requested_agent_count=2,
+        agent_norad_ids=(25544, 40909),
+    )
+    validation_large = AgentSelection(
+        seed=100,
+        requested_agent_count=4,
+        agent_norad_ids=(25544, 40909, 43013, 44001),
+    )
+    manifest = AgentSelectionManifest(
+        catalog_epoch_utc=propagation.coarse_propagation.start_epoch_utc,
+        eligible_norad_ids=(25544, 40909, 43013, 44001),
+        calibration_selections=(small, large),
+        validation_selections=(validation_small, validation_large),
+    )
+
+    screening = propagation.screen_agent_selections(manifest)
+
+    assert screening.screened_agent_norad_ids == (25544, 40909, 43013, 44001)
+    assert len(screening.encounter_windows) == 6
+    assert len(screening.windows_for(small)) == 5
+    assert all(
+        25544 in (window.first_norad_id, window.second_norad_id)
+        or 40909 in (window.first_norad_id, window.second_norad_id)
+        for window in screening.windows_for(small)
+    )
+
+
+def test_screening_rejects_absent_or_ineligible_selected_agents() -> None:
+    propagation = build_two_resolution_propagation(
+        _catalog(_object(25544, is_agent_candidate=True), _object(40909)),
+        _config(),
+    )
+
+    with pytest.raises(ValueError, match="absent"):
+        propagation.discover_encounter_windows((99999,))
+    with pytest.raises(ValueError, match="not metadata-approved"):
+        propagation.discover_encounter_windows((40909,))
 
 
 def test_rejects_nonconservative_relative_speed_bound() -> None:
@@ -163,4 +249,4 @@ def test_rejects_nonconservative_relative_speed_bound() -> None:
     )
 
     with pytest.raises(PropagationError, match="not conservative"):
-        propagation.discover_encounter_windows()
+        propagation.discover_encounter_windows((25544,))

@@ -11,6 +11,9 @@ from sgp4.earth_gravity import wgs72
 
 from orbitzoo.thesis.calibration.config import CalibrationConfig
 from orbitzoo.thesis.calibration.models import (
+    AgentSelection,
+    AgentSelectionManifest,
+    CandidateScreeningResult,
     EncounterWindow,
     FineEncounterTrajectory,
     LoadedCatalog,
@@ -82,19 +85,60 @@ class TwoResolutionPropagation:
             + self.coarse_curvature_margin_meters
         )
 
-    def discover_encounter_windows(self) -> tuple[EncounterWindow, ...]:
-        """Run the full-catalog coarse pass and merge candidate pair intervals."""
+    def _validated_agent_ids(
+        self,
+        agent_norad_ids: Iterable[int],
+    ) -> tuple[int, ...]:
+        identifiers = tuple(agent_norad_ids)
+        if not identifiers:
+            raise ValueError("at least one selected agent NORAD ID is required")
+        if any(
+            isinstance(identifier, bool)
+            or not isinstance(identifier, int)
+            or identifier <= 0
+            for identifier in identifiers
+        ):
+            raise ValueError("selected agent NORAD IDs must be positive integers")
+        if len(identifiers) != len(set(identifiers)):
+            raise ValueError("selected agent NORAD IDs must be unique")
+        absent_ids = set(identifiers).difference(self._object_by_id)
+        if absent_ids:
+            raise ValueError(
+                "selected agents are absent from the altitude-filtered catalog: "
+                f"{sorted(absent_ids)}"
+            )
+        ineligible_ids = sorted(
+            identifier
+            for identifier in identifiers
+            if not self._object_by_id[identifier].is_agent_candidate
+        )
+        if ineligible_ids:
+            raise ValueError(
+                "selected agents are not metadata-approved agent candidates: "
+                f"{ineligible_ids}"
+            )
+        return tuple(sorted(identifiers))
+
+    def discover_encounter_windows(
+        self,
+        agent_norad_ids: Iterable[int],
+    ) -> tuple[EncounterWindow, ...]:
+        """Screen selected agents against the spatially indexed full catalog."""
+        selected_agent_ids = self._validated_agent_ids(agent_norad_ids)
         propagation = self._config.propagation
         global_start = self._coarse_propagation.start_epoch_utc
         global_end = self._coarse_propagation.end_epoch_utc
         padding = timedelta(seconds=propagation.fine_window_padding_seconds)
         coarse_interval = timedelta(seconds=propagation.coarse_step_seconds)
-        possible_agents = {
-            item.norad_id
-            for item in self._coarse_propagation.objects
-            if item.is_agent_candidate
-        }
         windows_by_pair: dict[tuple[int, int], list[EncounterWindow]] = {}
+        index_by_norad_id = {
+            norad_id: index
+            for index, norad_id in enumerate(self._coarse_propagation.norad_ids)
+        }
+        agent_indices = np.asarray(
+            [index_by_norad_id[norad_id] for norad_id in selected_agent_ids],
+            dtype=np.intp,
+        )
 
         for frame in self._coarse_propagation:
             if frame.epoch_utc >= global_end:
@@ -109,15 +153,30 @@ class TwoResolutionPropagation:
                 )
 
             tree = cKDTree(frame.positions_m)
-            candidate_indices = sorted(
-                tree.query_pairs(self.coarse_search_radius_meters)
+            neighbor_indices = tree.query_ball_point(
+                frame.positions_m[agent_indices],
+                self.coarse_search_radius_meters,
             )
-            for first_index, second_index in candidate_indices:
+            candidate_indices: set[tuple[int, int]] = set()
+            for agent_index, neighbors in zip(agent_indices, neighbor_indices):
+                for neighbor_index in neighbors:
+                    if neighbor_index == agent_index:
+                        continue
+                    first_index, second_index = int(agent_index), int(neighbor_index)
+                    if frame.norad_ids[first_index] > frame.norad_ids[second_index]:
+                        first_index, second_index = second_index, first_index
+                    candidate_indices.add((first_index, second_index))
+
+            for first_index, second_index in sorted(
+                candidate_indices,
+                key=lambda pair: (
+                    frame.norad_ids[pair[0]],
+                    frame.norad_ids[pair[1]],
+                ),
+            ):
                 first_id = frame.norad_ids[first_index]
                 second_id = frame.norad_ids[second_index]
-                if first_id not in possible_agents and second_id not in possible_agents:
-                    continue
-                pair = tuple(sorted((first_id, second_id)))
+                pair = first_id, second_id
                 relative_position = (
                     frame.positions_m[second_index]
                     - frame.positions_m[first_index]
@@ -195,6 +254,41 @@ class TwoResolutionPropagation:
         )
         return tuple(windows)
 
+    def screen_agent_selections(
+        self,
+        manifest: AgentSelectionManifest,
+    ) -> CandidateScreeningResult:
+        """Screen the largest nested population for every configured seed once."""
+        if manifest.catalog_epoch_utc != self._coarse_propagation.start_epoch_utc:
+            raise ValueError(
+                "agent-selection catalog epoch does not match propagation start"
+            )
+        largest_by_seed: list[AgentSelection] = []
+        for selections in (
+            manifest.calibration_selections,
+            manifest.validation_selections,
+        ):
+            by_seed: dict[int, list] = {}
+            for selection in selections:
+                by_seed.setdefault(selection.seed, []).append(selection)
+            largest_by_seed.extend(
+                max(seed_selections, key=lambda item: item.requested_agent_count)
+                for seed_selections in by_seed.values()
+            )
+        screened_agent_ids = tuple(
+            sorted(
+                {
+                    norad_id
+                    for selection in largest_by_seed
+                    for norad_id in selection.agent_norad_ids
+                }
+            )
+        )
+        return CandidateScreeningResult(
+            screened_agent_norad_ids=screened_agent_ids,
+            encounter_windows=self.discover_encounter_windows(screened_agent_ids),
+        )
+
     def iter_fine_trajectories(
         self,
         windows: Iterable[EncounterWindow],
@@ -238,9 +332,14 @@ class TwoResolutionPropagation:
             )
             yield FineEncounterTrajectory(window=window, frames=frames)
 
-    def run(self) -> Iterator[FineEncounterTrajectory]:
+    def run(
+        self,
+        agent_norad_ids: Iterable[int],
+    ) -> Iterator[FineEncounterTrajectory]:
         """Discover coarse windows and stream their fine pair trajectories."""
-        return self.iter_fine_trajectories(self.discover_encounter_windows())
+        return self.iter_fine_trajectories(
+            self.discover_encounter_windows(agent_norad_ids)
+        )
 
 
 def build_two_resolution_propagation(
