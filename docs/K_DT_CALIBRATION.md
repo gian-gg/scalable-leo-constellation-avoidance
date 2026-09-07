@@ -93,6 +93,31 @@ timestamp must be stored with the run outputs. This keeps the checked-in
 configuration usable with different frozen catalog snapshots without making the
 start time ambiguous within a run.
 
+## SGP4 propagation
+
+`propagate_catalog` initializes SGP4 from each accepted TLE and creates a
+repeatable, streaming `SGP4Propagation`. Its timeline includes both the common
+start epoch and the configured end epoch, with frames separated by
+`reference_step_seconds`. The default one-day, ten-second configuration therefore
+produces 8,641 frames.
+
+SGP4 produces True Equator Mean Equinox (TEME) positions in kilometres and
+velocities in kilometres per second. Each emitted `CartesianStateFrame` converts
+these values to `float64` metres and metres per second. Any nonzero SGP4 status
+fails the run with the affected NORAD ID, UTC epoch, and decoded error reason;
+partial frames are never emitted.
+
+The configured altitude limits are applied once at the common start epoch using
+geocentric distance minus the WGS-72 equatorial radius. Filtering once keeps the
+same ordered NORAD IDs and array shape in every frame. The excluded IDs remain
+available through `altitude_filtered_norad_ids`, and propagation fails if the
+filter removes the entire catalog.
+
+Frames are calculated in bounded batches and yielded one at a time. This avoids
+holding the full `(time, object, state)` trajectory in memory when calibrating
+large catalogs. Iterating the propagation object again deterministically reruns
+the same trajectory. This phase performs no maneuvers.
+
 ## Default sweep
 
 The first calibration evaluates agent populations of 16, 64, and 256; neighbor
@@ -123,14 +148,19 @@ validation fails.
 The equivalent Python API is:
 
 ```python
-from orbitzoo.thesis.calibration import CalibrationConfig, load_catalog
+from orbitzoo.thesis.calibration import (
+    CalibrationConfig,
+    load_catalog,
+    propagate_catalog,
+)
 
 path = "configs/k_dt_calibration.json"
 config = CalibrationConfig.load(path)
 catalog = load_catalog(config, path)
+propagation = propagate_catalog(catalog, config)
 
-for object_record in catalog.objects:
-    print(object_record.norad_id, object_record.tle_epoch_utc)
+for frame in propagation:
+    print(frame.epoch_utc, frame.positions_m.shape)
 ```
 
 Saving a configuration validates it and emits deterministic, sorted JSON. The

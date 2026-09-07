@@ -23,6 +23,11 @@ from orbitzoo.thesis.calibration.models import (
     RankedNeighbor,
     ReferenceConjunction,
 )
+from orbitzoo.thesis.calibration.propagation import (
+    PropagationError,
+    SGP4Propagation,
+    propagate_catalog,
+)
 
 __all__ = [
     "AgentSelection",
@@ -38,8 +43,11 @@ __all__ = [
     "ObjectType",
     "PassingThresholds",
     "PropagationConfig",
+    "PropagationError",
     "RankedNeighbor",
     "ReferenceConjunction",
     "SweepConfig",
+    "SGP4Propagation",
     "load_catalog",
+    "propagate_catalog",
 ]

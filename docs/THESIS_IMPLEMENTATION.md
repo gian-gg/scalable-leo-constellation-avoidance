@@ -77,3 +77,6 @@ freshness cutoff, and joins optional object metadata. Validated calibration data
 models provide SI-unit Cartesian frames, deterministic agent selections,
 ID-based conjunctions and neighbor rankings, combination metrics, and final
 recommendations without coupling reference results to the runtime safety model.
+The calibration propagator now streams deterministic SGP4 TEME states over the
+configured reference timeline, converts all Cartesian values to SI units, and
+applies the configured LEO altitude limits at the common start epoch.

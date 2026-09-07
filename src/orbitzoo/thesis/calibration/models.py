@@ -137,17 +137,20 @@ class LoadedCatalog:
 
 @dataclass(frozen=True)
 class CartesianStateFrame:
-    """Cartesian states for every retained object at one UTC epoch, in SI units."""
+    """TEME Cartesian states for every retained object at one UTC epoch."""
 
     epoch_utc: datetime
     norad_ids: tuple[int, ...]
     positions_m: NDArray[np.float64]
     velocities_mps: NDArray[np.float64]
+    reference_frame: str = "TEME"
 
     def __post_init__(self) -> None:
         norad_ids = _norad_ids("norad_ids", tuple(self.norad_ids))
         if not norad_ids:
             raise ValueError("a Cartesian state frame cannot be empty")
+        if self.reference_frame != "TEME":
+            raise ValueError("calibration Cartesian states must use the TEME frame")
         positions = np.asarray(self.positions_m, dtype=np.float64).copy()
         velocities = np.asarray(self.velocities_mps, dtype=np.float64).copy()
         expected_shape = (len(norad_ids), 3)
