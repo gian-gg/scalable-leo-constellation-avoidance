@@ -565,6 +565,7 @@ class RankedNeighborFrame:
 
     decision_epoch_utc: datetime
     agent_norad_ids: tuple[int, ...]
+    maximum_neighbors: int
     rankings: tuple[RankedNeighbor, ...]
 
     def __post_init__(self) -> None:
@@ -574,6 +575,7 @@ class RankedNeighborFrame:
             raise ValueError("agent_norad_ids cannot be empty")
         if agent_ids != tuple(sorted(agent_ids)):
             raise ValueError("agent_norad_ids must be sorted")
+        _positive_integer("maximum_neighbors", self.maximum_neighbors)
         rankings = tuple(self.rankings)
         expected_order = tuple(
             sorted(rankings, key=lambda item: (item.agent_norad_id, item.rank))
@@ -581,7 +583,9 @@ class RankedNeighborFrame:
         if rankings != expected_order:
             raise ValueError("rankings must be ordered by agent NORAD ID and rank")
         agent_id_set = set(agent_ids)
-        ranks_by_agent: dict[int, list[int]] = {identifier: [] for identifier in agent_ids}
+        ranks_by_agent: dict[int, list[int]] = {
+            identifier: [] for identifier in agent_ids
+        }
         for ranking in rankings:
             if ranking.decision_epoch_utc != epoch:
                 raise ValueError("ranked neighbor epoch does not match its frame")
@@ -589,6 +593,8 @@ class RankedNeighborFrame:
                 raise ValueError("ranking references an agent absent from its frame")
             ranks_by_agent[ranking.agent_norad_id].append(ranking.rank)
         for ranks in ranks_by_agent.values():
+            if len(ranks) > self.maximum_neighbors:
+                raise ValueError("ranking count exceeds maximum_neighbors")
             if ranks != list(range(1, len(ranks) + 1)):
                 raise ValueError("neighbor ranks must be contiguous from one")
         object.__setattr__(self, "decision_epoch_utc", epoch)
@@ -614,6 +620,73 @@ class RankedNeighborFrame:
             for ranking in self.rankings
             if ranking.agent_norad_id in selected_ids
             and ranking.rank <= neighborhood_size
+        )
+
+
+@dataclass(frozen=True)
+class ThreatDetection:
+    """First visibility of one reference event for a k/delta-t case."""
+
+    evaluation_split: EvaluationSplit
+    selection_seed: int
+    agent_count: int
+    neighborhood_size: int
+    decision_interval_seconds: int
+    first_norad_id: int
+    second_norad_id: int
+    reference_tca_epoch_utc: datetime
+    first_visible_epoch_utc: datetime | None
+    decisions_remaining: int
+    minimum_decisions_before_tca: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.evaluation_split, EvaluationSplit):
+            raise ValueError("evaluation_split must be an EvaluationSplit")
+        _nonnegative_integer("selection_seed", self.selection_seed)
+        for name in (
+            "agent_count",
+            "neighborhood_size",
+            "decision_interval_seconds",
+            "first_norad_id",
+            "second_norad_id",
+            "minimum_decisions_before_tca",
+        ):
+            _positive_integer(name, getattr(self, name))
+        if self.first_norad_id >= self.second_norad_id:
+            raise ValueError("threat-detection NORAD IDs must be in ascending order")
+        reference_tca = _utc(
+            "reference_tca_epoch_utc",
+            self.reference_tca_epoch_utc,
+        )
+        _nonnegative_integer("decisions_remaining", self.decisions_remaining)
+        first_visible = self.first_visible_epoch_utc
+        if first_visible is None:
+            if self.decisions_remaining != 0:
+                raise ValueError("an undetected threat cannot have decisions remaining")
+        else:
+            first_visible = _utc("first_visible_epoch_utc", first_visible)
+            if first_visible >= reference_tca:
+                raise ValueError("first visibility must precede reference TCA")
+            expected_remaining = math.ceil(
+                (reference_tca - first_visible).total_seconds()
+                / self.decision_interval_seconds
+            )
+            if self.decisions_remaining != expected_remaining:
+                raise ValueError(
+                    "decisions_remaining does not match visibility lead time"
+                )
+        object.__setattr__(self, "reference_tca_epoch_utc", reference_tca)
+        object.__setattr__(self, "first_visible_epoch_utc", first_visible)
+
+    @property
+    def detected(self) -> bool:
+        return self.first_visible_epoch_utc is not None
+
+    @property
+    def timely_detected(self) -> bool:
+        return (
+            self.detected
+            and self.decisions_remaining >= self.minimum_decisions_before_tca
         )
 
 

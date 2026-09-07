@@ -318,6 +318,7 @@ def rank_neighbors_at_epoch(
     return RankedNeighborFrame(
         decision_epoch_utc=frame.epoch_utc,
         agent_norad_ids=agent_ids,
+        maximum_neighbors=maximum_neighbors,
         rankings=tuple(rankings),
     )
 

@@ -101,3 +101,8 @@ epoch, vectorized selected-agent-to-catalog calculations produce deterministic
 threat rankings without evaluating irrelevant catalog-only pairs. The maximum
 configured neighborhood is streamed once and filtered for nested populations
 and smaller `k` values.
+One joint evaluator now consumes those ranking frames and updates every
+applicable neighborhood prefix and decision schedule simultaneously. It matches
+ranked pairs to future reference events within the screening horizon, records
+first visibility, and derives the number of actionable decisions remaining
+before TCA without rerunning propagation for any `(k, delta t)` combination.

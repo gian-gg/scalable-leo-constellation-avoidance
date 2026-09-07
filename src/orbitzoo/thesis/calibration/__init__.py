@@ -28,6 +28,7 @@ from orbitzoo.thesis.calibration.models import (
     RankedNeighborFrame,
     ReferenceConjunction,
     ReferenceConjunctionManifest,
+    ThreatDetection,
 )
 from orbitzoo.thesis.calibration.propagation import (
     PropagationError,
@@ -55,6 +56,7 @@ from orbitzoo.thesis.calibration.ranking import (
     iter_ranked_neighbor_frames,
     rank_neighbors_at_epoch,
 )
+from orbitzoo.thesis.calibration.evaluation import evaluate_joint_combinations
 
 __all__ = [
     "AgentSelection",
@@ -81,10 +83,12 @@ __all__ = [
     "ReferenceConjunctionManifest",
     "DecisionSchedule",
     "SweepConfig",
+    "ThreatDetection",
     "SGP4Propagation",
     "TwoResolutionPropagation",
     "build_decision_schedule",
     "build_two_resolution_propagation",
+    "evaluate_joint_combinations",
     "generate_reference_conjunctions",
     "iter_ranked_neighbor_frames",
     "load_agent_selections",

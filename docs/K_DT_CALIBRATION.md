@@ -68,6 +68,7 @@ recommendation:
 | `ReferenceConjunctionManifest` | Versioned fine-pass conjunction truth |
 | `RankedNeighbor` | One agent-neighbor threat rank at a decision epoch |
 | `RankedNeighborFrame` | Reusable top ranks for all screened agents at one epoch |
+| `ThreatDetection` | First visibility and decision lead time for one reference event |
 | `CombinationMetrics` | Counts and runtime for one population, seed, `k`, and delta-t |
 | `CalibrationRecommendation` | Selected pair, thresholds, pass status, and supporting metrics |
 
@@ -211,6 +212,28 @@ configured `k` is retained per agent; smaller candidate values use
 `RankedNeighborFrame.rankings_for(selection, k)`. Frames are streamed so a
 full-day catalog run does not retain every decision and agent in memory.
 
+## Joint k/delta-t evaluation
+
+`evaluate_joint_combinations` consumes the ranking-frame iterator once. At each
+shared epoch it activates only the candidate decision-interval schedules that
+contain that timestamp. A neighbor at rank `r` updates every configured
+neighborhood prefix where `k >= r`, so no ranking or orbital propagation is
+repeated for an individual `(k, delta t)` pair.
+
+A visible neighbor is matched to a canonical reference pair only when its TCA
+is still in the future and within the configured screening horizon. If a pair
+has more than one reference event, the predicted absolute TCA selects the
+closest eligible event. Either direction of an agent-agent ranking can detect
+the shared event, but the event is emitted only once per selection and
+combination.
+
+Each `ThreatDetection` records the reference event, first visible decision
+epoch, and number of actionable decisions before TCA. Undetected events use a
+null visibility epoch and zero remaining decisions. For a detected event the
+count is `ceil((TCA - first_visible) / delta_t)`, and timely status is derived
+from the configured minimum. The evaluator verifies that every shared epoch is
+present exactly once and that ranking frames retain the largest candidate `k`.
+
 ## Deterministic agent selection
 
 Agent populations are selected only after TLE freshness and start-epoch altitude
@@ -273,6 +296,7 @@ from orbitzoo.thesis.calibration import (
     CalibrationConfig,
     build_decision_schedule,
     build_two_resolution_propagation,
+    evaluate_joint_combinations,
     generate_reference_conjunctions,
     iter_ranked_neighbor_frames,
     load_catalog,
@@ -311,15 +335,20 @@ schedule = build_decision_schedule(
     propagation.coarse_propagation.start_epoch_utc,
     config,
 )
-selection = selections.calibration_selections[0]
 ranking_frames = iter_ranked_neighbor_frames(
     propagation.coarse_propagation,
     config,
     agent_norad_ids=screening.screened_agent_norad_ids,
 )
-for ranking_frame in ranking_frames:
-    if ranking_frame.decision_epoch_utc in schedule.epochs_for(120):
-        top_four = ranking_frame.rankings_for(selection, 4)
+detections = evaluate_joint_combinations(
+    ranking_frames,
+    references,
+    selections,
+    config,
+    schedule=schedule,
+)
+for detection in detections:
+    print(detection.detected, detection.decisions_remaining)
 ```
 
 Saving a configuration validates it and emits deterministic, sorted JSON. The
