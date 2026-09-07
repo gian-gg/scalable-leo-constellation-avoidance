@@ -111,3 +111,8 @@ grid, including explicit zero-event cases. Calibration and validation counts
 are pooled separately before recall and timely-detection rates are calculated,
 and versioned passing thresholds produce an auditable result for every
 candidate pair without averaging percentages across unequal samples.
+Final selection now considers calibration evidence only, preferring the
+smallest passing neighborhood and then the largest passing decision interval.
+The exact selected pair is audited on held-out validation data without fallback
+selection, producing separate calibration, validation, and final acceptance
+statuses.

@@ -256,6 +256,21 @@ case with no reference events reports both rates as zero and cannot pass, even
 if thresholds were configured as zero. Final parameter selection remains a
 separate phase so validation evidence cannot influence the calibration search.
 
+## Recommendation and held-out validation
+
+`select_calibration_recommendation` verifies the pooled table against its
+per-sample evidence, then considers calibration rows only. From the passing
+calibration candidates it deterministically chooses the smallest `k`; among
+ties at that `k`, it chooses the largest `delta t`. This implements the stated
+locality objective first and reduces decision frequency second.
+
+Only after selection does the function attach the matching held-out validation
+rows. `CalibrationRecommendation` exposes pooled calibration and validation
+recall, timely-detection fractions, separate pass flags, and final acceptance.
+If validation fails, the selected recommendation remains rejected; another
+candidate is not chosen using validation results. If calibration has no passing
+candidate, `NoPassingCombinationError` is raised instead of inventing a result.
+
 ## Deterministic agent selection
 
 Agent populations are selected only after TLE freshness and start-epoch altitude
@@ -325,6 +340,7 @@ from orbitzoo.thesis.calibration import (
     load_catalog,
     save_agent_selections,
     save_reference_conjunctions,
+    select_calibration_recommendation,
     select_agent_populations,
 )
 
@@ -386,6 +402,17 @@ for result in pooled_results:
         result.timely_detection_fraction,
         result.passed,
     )
+
+recommendation = select_calibration_recommendation(
+    metrics,
+    pooled_results,
+    config,
+)
+print(
+    recommendation.neighborhood_size,
+    recommendation.decision_interval_seconds,
+    recommendation.is_accepted,
+)
 ```
 
 Saving a configuration validates it and emits deterministic, sorted JSON. The

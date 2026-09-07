@@ -64,6 +64,10 @@ from orbitzoo.thesis.calibration.metrics import (
     aggregate_detection_metrics,
     pool_combination_metrics,
 )
+from orbitzoo.thesis.calibration.recommendation import (
+    NoPassingCombinationError,
+    select_calibration_recommendation,
+)
 
 __all__ = [
     "AgentSelection",
@@ -93,6 +97,7 @@ __all__ = [
     "SweepConfig",
     "ThreatDetection",
     "MetricCaseKey",
+    "NoPassingCombinationError",
     "SGP4Propagation",
     "TwoResolutionPropagation",
     "build_decision_schedule",
@@ -111,5 +116,6 @@ __all__ = [
     "rank_neighbors_at_epoch",
     "save_agent_selections",
     "save_reference_conjunctions",
+    "select_calibration_recommendation",
     "select_agent_populations",
 ]

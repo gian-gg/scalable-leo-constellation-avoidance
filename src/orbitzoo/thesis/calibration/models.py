@@ -875,11 +875,31 @@ class CalibrationRecommendation:
         return detected_count / reference_count, timely_count / reference_count
 
     def _passes(self, metrics: tuple[CombinationMetrics, ...]) -> bool:
+        reference_count = sum(
+            item.reference_conjunction_count for item in metrics
+        )
         recall, timely_fraction = self._aggregate_rates(metrics)
         return (
-            recall >= self.minimum_threat_recall
+            reference_count > 0
+            and recall >= self.minimum_threat_recall
             and timely_fraction >= self.minimum_timely_detection_fraction
         )
+
+    @property
+    def calibration_threat_recall(self) -> float:
+        return self._aggregate_rates(self.calibration_metrics)[0]
+
+    @property
+    def calibration_timely_detection_fraction(self) -> float:
+        return self._aggregate_rates(self.calibration_metrics)[1]
+
+    @property
+    def validation_threat_recall(self) -> float:
+        return self._aggregate_rates(self.validation_metrics)[0]
+
+    @property
+    def validation_timely_detection_fraction(self) -> float:
+        return self._aggregate_rates(self.validation_metrics)[1]
 
     @property
     def calibration_passed(self) -> bool:
