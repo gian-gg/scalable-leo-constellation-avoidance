@@ -17,7 +17,9 @@ from orbitzoo.thesis.calibration.models import (
     CartesianStateFrame,
     CatalogObject,
     CombinationMetrics,
+    EncounterWindow,
     EvaluationSplit,
+    FineEncounterTrajectory,
     LoadedCatalog,
     ObjectType,
     RankedNeighbor,
@@ -27,6 +29,11 @@ from orbitzoo.thesis.calibration.propagation import (
     PropagationError,
     SGP4Propagation,
     propagate_catalog,
+    propagate_objects,
+)
+from orbitzoo.thesis.calibration.two_resolution import (
+    TwoResolutionPropagation,
+    build_two_resolution_propagation,
 )
 
 __all__ = [
@@ -38,7 +45,9 @@ __all__ = [
     "CatalogConfig",
     "CartesianStateFrame",
     "CombinationMetrics",
+    "EncounterWindow",
     "EvaluationSplit",
+    "FineEncounterTrajectory",
     "LoadedCatalog",
     "ObjectType",
     "PassingThresholds",
@@ -48,6 +57,9 @@ __all__ = [
     "ReferenceConjunction",
     "SweepConfig",
     "SGP4Propagation",
+    "TwoResolutionPropagation",
+    "build_two_resolution_propagation",
     "load_catalog",
     "propagate_catalog",
+    "propagate_objects",
 ]

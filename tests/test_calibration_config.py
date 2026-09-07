@@ -74,6 +74,9 @@ def test_invalid_catalog_configuration_is_rejected(catalog: CatalogConfig) -> No
         PropagationConfig(start_epoch_mode="explicit_utc"),
         PropagationConfig(duration_seconds=0),
         PropagationConfig(duration_seconds=101, reference_step_seconds=10),
+        PropagationConfig(coarse_step_seconds=55),
+        PropagationConfig(fine_window_padding_seconds=55),
+        PropagationConfig(maximum_relative_speed_mps=math.nan),
     ],
 )
 def test_invalid_propagation_configuration_is_rejected(

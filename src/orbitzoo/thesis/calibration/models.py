@@ -171,6 +171,63 @@ class CartesianStateFrame:
 
 
 @dataclass(frozen=True)
+class EncounterWindow:
+    """Merged interval requiring fine propagation for one canonical pair."""
+
+    first_norad_id: int
+    second_norad_id: int
+    start_epoch_utc: datetime
+    end_epoch_utc: datetime
+    minimum_coarse_miss_distance_meters: float
+    coarse_detection_count: int
+
+    def __post_init__(self) -> None:
+        _positive_integer("first_norad_id", self.first_norad_id)
+        _positive_integer("second_norad_id", self.second_norad_id)
+        if self.first_norad_id >= self.second_norad_id:
+            raise ValueError("encounter-window NORAD IDs must be in ascending order")
+        start = _utc("start_epoch_utc", self.start_epoch_utc)
+        end = _utc("end_epoch_utc", self.end_epoch_utc)
+        if end <= start:
+            raise ValueError("encounter window end must follow its start")
+        _finite_nonnegative(
+            "minimum_coarse_miss_distance_meters",
+            self.minimum_coarse_miss_distance_meters,
+        )
+        _positive_integer("coarse_detection_count", self.coarse_detection_count)
+        object.__setattr__(self, "start_epoch_utc", start)
+        object.__setattr__(self, "end_epoch_utc", end)
+
+
+@dataclass(frozen=True)
+class FineEncounterTrajectory:
+    """Fine-resolution pair states within one candidate encounter window."""
+
+    window: EncounterWindow
+    frames: tuple[CartesianStateFrame, ...]
+
+    def __post_init__(self) -> None:
+        frames = tuple(self.frames)
+        if not frames:
+            raise ValueError("a fine encounter trajectory cannot be empty")
+        expected_ids = (self.window.first_norad_id, self.window.second_norad_id)
+        previous_epoch: datetime | None = None
+        for frame in frames:
+            if frame.norad_ids != expected_ids:
+                raise ValueError("fine trajectory frames must match the encounter pair")
+            if not self.window.start_epoch_utc <= frame.epoch_utc <= self.window.end_epoch_utc:
+                raise ValueError("fine trajectory frame lies outside its encounter window")
+            if previous_epoch is not None and frame.epoch_utc <= previous_epoch:
+                raise ValueError("fine trajectory frames must be strictly increasing")
+            previous_epoch = frame.epoch_utc
+        if frames[0].epoch_utc != self.window.start_epoch_utc:
+            raise ValueError("fine trajectory must start at the encounter-window boundary")
+        if frames[-1].epoch_utc != self.window.end_epoch_utc:
+            raise ValueError("fine trajectory must end at the encounter-window boundary")
+        object.__setattr__(self, "frames", frames)
+
+
+@dataclass(frozen=True)
 class AgentSelection:
     """Deterministic set of maneuverable payloads selected for one seed."""
 

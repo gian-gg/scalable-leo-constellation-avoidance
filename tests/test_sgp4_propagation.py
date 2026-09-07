@@ -73,6 +73,8 @@ def _config(
         propagation=PropagationConfig(
             duration_seconds=20,
             reference_step_seconds=10,
+            coarse_step_seconds=20,
+            fine_window_padding_seconds=20,
         ),
         safety=SafetyConfig(screening_horizon_seconds=20),
         sweep=SweepConfig(

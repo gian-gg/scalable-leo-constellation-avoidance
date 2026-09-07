@@ -60,6 +60,8 @@ recommendation:
 |---|---|
 | `CatalogObject` | Validated TLE and joined metadata for one NORAD ID |
 | `CartesianStateFrame` | All retained Cartesian states at one UTC epoch |
+| `EncounterWindow` | Merged coarse candidate interval for one object pair |
+| `FineEncounterTrajectory` | Fine pair states inside one encounter window |
 | `AgentSelection` | Deterministic agent population for one seed |
 | `ReferenceConjunction` | Propagated closest approach for one canonical ID pair |
 | `RankedNeighbor` | One agent-neighbor threat rank at a decision epoch |
@@ -95,11 +97,11 @@ start time ambiguous within a run.
 
 ## SGP4 propagation
 
-`propagate_catalog` initializes SGP4 from each accepted TLE and creates a
-repeatable, streaming `SGP4Propagation`. Its timeline includes both the common
-start epoch and the configured end epoch, with frames separated by
-`reference_step_seconds`. The default one-day, ten-second configuration therefore
-produces 8,641 frames.
+`propagate_catalog` is the low-level propagation primitive. It initializes SGP4
+from each accepted TLE and creates a repeatable, streaming `SGP4Propagation` at
+an explicit timestep. Its timeline includes both the common start epoch and the
+configured end epoch. A direct one-day, ten-second full-catalog stream would
+contain 8,641 frames, so calibration uses the two-resolution layer below.
 
 SGP4 produces True Equator Mean Equinox (TEME) positions in kilometres and
 velocities in kilometres per second. Each emitted `CartesianStateFrame` converts
@@ -117,6 +119,40 @@ Frames are calculated in bounded batches and yielded one at a time. This avoids
 holding the full `(time, object, state)` trajectory in memory when calibrating
 large catalogs. Iterating the propagation object again deterministically reruns
 the same trajectory. This phase performs no maneuvers.
+
+## Two-resolution propagation
+
+`build_two_resolution_propagation` performs the production calibration pass:
+
+1. It propagates every altitude-filtered object at `coarse_step_seconds`.
+2. At each coarse frame, a `cKDTree` spatial index finds nearby pairs without an
+   all-pairs distance matrix.
+3. Only pairs containing at least one metadata-approved agent candidate are
+   retained, because other pairs cannot affect an actor's neighborhood recall.
+4. Candidate intervals receive `fine_window_padding_seconds` on both sides and
+   overlapping intervals for the same canonical NORAD pair are merged.
+5. Only the two objects in each merged interval are propagated at
+   `reference_step_seconds`; each fine trajectory is yielded independently.
+
+The conservative coarse query radius is:
+
+```text
+safe_separation_meters
++ maximum_relative_speed_mps * coarse_step_seconds
+```
+
+This includes pairs that could cross the safety boundary between coarse samples,
+not only pairs already close at a sample. Nearby pairs then pass through a
+linear relative-motion check. Its acceptance threshold adds a conservative
+two-body curvature margin derived from the configured minimum altitude, Earth
+gravity, and the coarse interval. This prevents parallel objects within the
+large spatial-query radius from creating unnecessary fine windows.
+
+Every coarse frame checks that twice the largest observed object speed remains
+below the configured relative-speed bound; calibration stops if the bound is too
+small. With the default values, the full catalog has 1,441 coarse frames instead
+of 8,641 fine frames. Fine work then depends only on the number and duration of
+candidate encounter windows.
 
 ## Default sweep
 
@@ -150,17 +186,18 @@ The equivalent Python API is:
 ```python
 from orbitzoo.thesis.calibration import (
     CalibrationConfig,
+    build_two_resolution_propagation,
     load_catalog,
-    propagate_catalog,
 )
 
 path = "configs/k_dt_calibration.json"
 config = CalibrationConfig.load(path)
 catalog = load_catalog(config, path)
-propagation = propagate_catalog(catalog, config)
+propagation = build_two_resolution_propagation(catalog, config)
+windows = propagation.discover_encounter_windows()
 
-for frame in propagation:
-    print(frame.epoch_utc, frame.positions_m.shape)
+for trajectory in propagation.iter_fine_trajectories(windows):
+    print(trajectory.window, len(trajectory.frames))
 ```
 
 Saving a configuration validates it and emits deterministic, sorted JSON. The

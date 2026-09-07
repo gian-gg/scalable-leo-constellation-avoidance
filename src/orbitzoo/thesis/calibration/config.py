@@ -78,6 +78,9 @@ class PropagationConfig:
     start_epoch_mode: str = LATEST_TLE_EPOCH
     duration_seconds: int = 86_400
     reference_step_seconds: int = 10
+    coarse_step_seconds: int = 60
+    fine_window_padding_seconds: int = 60
+    maximum_relative_speed_mps: float = 20_000.0
 
     def validate(self) -> None:
         if self.start_epoch_mode != LATEST_TLE_EPOCH:
@@ -92,10 +95,37 @@ class PropagationConfig:
             self.reference_step_seconds, int
         ):
             raise ValueError("reference_step_seconds must be an integer")
-        if self.duration_seconds <= 0 or self.reference_step_seconds <= 0:
-            raise ValueError("propagation duration and reference step must be positive")
+        if isinstance(self.coarse_step_seconds, bool) or not isinstance(
+            self.coarse_step_seconds, int
+        ):
+            raise ValueError("coarse_step_seconds must be an integer")
+        if isinstance(self.fine_window_padding_seconds, bool) or not isinstance(
+            self.fine_window_padding_seconds, int
+        ):
+            raise ValueError("fine_window_padding_seconds must be an integer")
+        if (
+            self.duration_seconds <= 0
+            or self.reference_step_seconds <= 0
+            or self.coarse_step_seconds <= 0
+        ):
+            raise ValueError("propagation duration and timesteps must be positive")
+        if self.fine_window_padding_seconds < 0:
+            raise ValueError("fine_window_padding_seconds cannot be negative")
         if self.duration_seconds % self.reference_step_seconds != 0:
             raise ValueError("duration_seconds must be divisible by reference_step_seconds")
+        if self.duration_seconds % self.coarse_step_seconds != 0:
+            raise ValueError("duration_seconds must be divisible by coarse_step_seconds")
+        if self.coarse_step_seconds % self.reference_step_seconds != 0:
+            raise ValueError("coarse_step_seconds must be divisible by reference_step_seconds")
+        if self.fine_window_padding_seconds % self.reference_step_seconds != 0:
+            raise ValueError(
+                "fine_window_padding_seconds must be divisible by reference_step_seconds"
+            )
+        if (
+            not math.isfinite(self.maximum_relative_speed_mps)
+            or self.maximum_relative_speed_mps <= 0.0
+        ):
+            raise ValueError("maximum_relative_speed_mps must be finite and positive")
 
 
 @dataclass(frozen=True)

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-from typing import Iterator
+from datetime import datetime, timedelta, timezone
+from typing import Iterable, Iterator, Sequence
 
 import numpy as np
 from sgp4.api import SGP4_ERRORS, Satrec, SatrecArray, jday
@@ -66,6 +66,88 @@ def _raise_first_error(
     )
 
 
+def _validate_batch_size(batch_size: int) -> None:
+    if isinstance(batch_size, bool) or not isinstance(batch_size, int) or batch_size <= 0:
+        raise ValueError("batch_size must be a positive integer")
+
+
+def _iter_satellite_frames(
+    satellites: tuple[Satrec, ...],
+    norad_ids: tuple[int, ...],
+    epochs: tuple[datetime, ...],
+    batch_size: int,
+) -> Iterator[CartesianStateFrame]:
+    satellite_array = SatrecArray(satellites)
+    for batch_start in range(0, len(epochs), batch_size):
+        batch_epochs = epochs[batch_start : batch_start + batch_size]
+        julian_dates_and_fractions = tuple(
+            _julian_date(epoch) for epoch in batch_epochs
+        )
+        julian_dates = np.asarray(
+            [value[0] for value in julian_dates_and_fractions],
+            dtype=np.float64,
+        )
+        fractions = np.asarray(
+            [value[1] for value in julian_dates_and_fractions],
+            dtype=np.float64,
+        )
+        errors, positions_km, velocities_kmps = satellite_array.sgp4(
+            julian_dates,
+            fractions,
+        )
+        _raise_first_error(errors, norad_ids, batch_epochs)
+        for index, epoch in enumerate(batch_epochs):
+            yield CartesianStateFrame(
+                epoch_utc=epoch,
+                norad_ids=norad_ids,
+                positions_m=positions_km[:, index, :] * METERS_PER_KILOMETER,
+                velocities_mps=(
+                    velocities_kmps[:, index, :] * METERS_PER_KILOMETER
+                ),
+            )
+
+
+def propagate_objects(
+    objects: Sequence[CatalogObject],
+    epochs: Iterable[datetime],
+    *,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+) -> Iterator[CartesianStateFrame]:
+    """Propagate an ordered object subset at explicit UTC epochs."""
+    _validate_batch_size(batch_size)
+    object_records = tuple(objects)
+    if not object_records:
+        raise ValueError("at least one catalog object is required")
+    norad_ids = tuple(item.norad_id for item in object_records)
+    if len(norad_ids) != len(set(norad_ids)):
+        raise ValueError("catalog object NORAD IDs must be unique")
+    supplied_epochs = tuple(epochs)
+    if not supplied_epochs:
+        raise ValueError("at least one propagation epoch is required")
+    if any(
+        not isinstance(epoch, datetime)
+        or epoch.tzinfo is None
+        or epoch.utcoffset() is None
+        for epoch in supplied_epochs
+    ):
+        raise ValueError("propagation epochs must be timezone-aware datetimes")
+    normalized_epochs = tuple(
+        epoch.astimezone(timezone.utc) for epoch in supplied_epochs
+    )
+    if any(
+        first >= second
+        for first, second in zip(normalized_epochs, normalized_epochs[1:])
+    ):
+        raise ValueError("propagation epochs must be strictly increasing")
+    satellites = tuple(_satellite(item) for item in object_records)
+    return _iter_satellite_frames(
+        satellites,
+        norad_ids,
+        normalized_epochs,
+        batch_size,
+    )
+
+
 class SGP4Propagation:
     """Reusable, streaming propagation of one validated catalog."""
 
@@ -75,22 +157,33 @@ class SGP4Propagation:
         config: CalibrationConfig,
         *,
         batch_size: int = DEFAULT_BATCH_SIZE,
+        step_seconds: int | None = None,
     ) -> None:
         config.validate()
-        if isinstance(batch_size, bool) or not isinstance(batch_size, int) or batch_size <= 0:
-            raise ValueError("batch_size must be a positive integer")
+        _validate_batch_size(batch_size)
+        if step_seconds is None:
+            step_seconds = config.propagation.reference_step_seconds
+        if (
+            isinstance(step_seconds, bool)
+            or not isinstance(step_seconds, int)
+            or step_seconds <= 0
+        ):
+            raise ValueError("step_seconds must be a positive integer")
+        if config.propagation.duration_seconds % step_seconds != 0:
+            raise ValueError("propagation duration must be divisible by step_seconds")
 
         self._config = config
         self._batch_size = batch_size
+        self._step_seconds = step_seconds
         self._start_epoch_utc = catalog.latest_epoch_utc
         frame_count = (
             config.propagation.duration_seconds
-            // config.propagation.reference_step_seconds
+            // step_seconds
             + 1
         )
         self._epochs = tuple(
             self._start_epoch_utc
-            + timedelta(seconds=index * config.propagation.reference_step_seconds)
+            + timedelta(seconds=index * step_seconds)
             for index in range(frame_count)
         )
 
@@ -155,33 +248,17 @@ class SGP4Propagation:
     def frame_count(self) -> int:
         return len(self._epochs)
 
+    @property
+    def step_seconds(self) -> int:
+        return self._step_seconds
+
     def __iter__(self) -> Iterator[CartesianStateFrame]:
-        satellite_array = SatrecArray(self._satellites)
-        for batch_start in range(0, self.frame_count, self._batch_size):
-            epochs = self._epochs[batch_start : batch_start + self._batch_size]
-            julian_dates_and_fractions = tuple(_julian_date(epoch) for epoch in epochs)
-            julian_dates = np.asarray(
-                [value[0] for value in julian_dates_and_fractions],
-                dtype=np.float64,
-            )
-            fractions = np.asarray(
-                [value[1] for value in julian_dates_and_fractions],
-                dtype=np.float64,
-            )
-            errors, positions_km, velocities_kmps = satellite_array.sgp4(
-                julian_dates,
-                fractions,
-            )
-            _raise_first_error(errors, self._norad_ids, epochs)
-            for index, epoch in enumerate(epochs):
-                yield CartesianStateFrame(
-                    epoch_utc=epoch,
-                    norad_ids=self._norad_ids,
-                    positions_m=positions_km[:, index, :] * METERS_PER_KILOMETER,
-                    velocities_mps=(
-                        velocities_kmps[:, index, :] * METERS_PER_KILOMETER
-                    ),
-                )
+        return _iter_satellite_frames(
+            self._satellites,
+            self._norad_ids,
+            self._epochs,
+            self._batch_size,
+        )
 
 
 def propagate_catalog(
@@ -189,6 +266,12 @@ def propagate_catalog(
     config: CalibrationConfig,
     *,
     batch_size: int = DEFAULT_BATCH_SIZE,
+    step_seconds: int | None = None,
 ) -> SGP4Propagation:
     """Prepare a deterministic iterable of SI-unit Cartesian state frames."""
-    return SGP4Propagation(catalog, config, batch_size=batch_size)
+    return SGP4Propagation(
+        catalog,
+        config,
+        batch_size=batch_size,
+        step_seconds=step_seconds,
+    )

@@ -13,7 +13,10 @@
     "minimum_timely_detection_fraction": 0.99
   },
   "propagation": {
+    "coarse_step_seconds": 60,
     "duration_seconds": 86400,
+    "fine_window_padding_seconds": 60,
+    "maximum_relative_speed_mps": 20000.0,
     "reference_step_seconds": 10,
     "start_epoch_mode": "latest_tle_epoch"
   },
