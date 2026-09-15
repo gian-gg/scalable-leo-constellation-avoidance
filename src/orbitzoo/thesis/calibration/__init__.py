@@ -68,12 +68,19 @@ from orbitzoo.thesis.calibration.recommendation import (
     NoPassingCombinationError,
     select_calibration_recommendation,
 )
+from orbitzoo.thesis.calibration.runner import (
+    CalibrationRunResult,
+    CalibrationRunStatus,
+    run_calibration,
+)
 
 __all__ = [
     "AgentSelection",
     "AgentSelectionManifest",
     "CalibrationConfig",
     "CalibrationRecommendation",
+    "CalibrationRunResult",
+    "CalibrationRunStatus",
     "CandidateScreeningResult",
     "CatalogLoadError",
     "CatalogObject",
@@ -114,6 +121,7 @@ __all__ = [
     "propagate_objects",
     "pool_combination_metrics",
     "rank_neighbors_at_epoch",
+    "run_calibration",
     "save_agent_selections",
     "save_reference_conjunctions",
     "select_calibration_recommendation",

@@ -98,11 +98,14 @@ oz missions
 oz mission hohmann
 oz run path/to/mission.py
 oz catalog
+oz calibrate --output runs/k_dt_calibration
 ```
 
 `oz run` and `oz mission` pass any remaining arguments to the selected script.
 `oz catalog` validates and summarizes the TLE and metadata files referenced by
 `configs/k_dt_calibration.json`; use `--config` to select another configuration.
+`oz calibrate` runs the complete propagation-only `k` and decision-interval
+calibration and writes its auditable artifacts to a new output directory.
 The legacy `orbitzoo-demo` command remains available for compatibility.
 
 # Tensorgator: Use Cases

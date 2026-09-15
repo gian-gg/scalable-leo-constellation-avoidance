@@ -308,9 +308,43 @@ seconds. Seeds 0 through 9 are reserved for selection, while seeds 100 through
 
 The selected pair must achieve at least 99.9% threat recall. At least 99% of
 reference threats must be detected with three or more decision opportunities
-remaining before time of closest approach. Among passing pairs, the later
-calibration runner will choose the smallest `k` and then the largest decision
-interval.
+remaining before time of closest approach. Among passing pairs, calibration
+selection chooses the smallest `k` and then the largest decision interval.
+
+## End-to-end calibration command
+
+Run the complete propagation-only workflow before training with:
+
+```sh
+oz calibrate \
+  --config configs/k_dt_calibration.json \
+  --output runs/k_dt_calibration
+```
+
+The output directory must not already exist. The runner writes to a temporary
+sibling directory and publishes the completed directory atomically, so an
+operational failure does not leave a run that looks complete. Progress for the
+eight stages is printed to standard error.
+
+Every completed run contains:
+
+| Artifact | Contents |
+| --- | --- |
+| `resolved_config.json` | Exact validated configuration used by the run |
+| `catalog_summary.json` | Resolved input paths, catalog epoch, filters, and counts |
+| `agent_selections.json` | Reproducible nested NORAD-ID selections |
+| `reference_conjunctions.json` | Fine-resolution reference truth |
+| `combination_metrics.json` | Per-seed and per-population evidence |
+| `pooled_metrics.json` | Split-specific threshold results for every pair |
+| `recommendation.json` | Selected pair, validation audit, status, and runtimes |
+| `summary.txt` | Human-readable outcome and key counts |
+
+Exit status `0` means the selected pair passed both calibration and held-out
+validation. Status `2` means no candidate passed calibration, while status `3`
+means the calibration-selected pair failed held-out validation. Both scientific
+rejections still publish their evidence. Configuration, catalog, propagation,
+or filesystem errors use the normal nonzero command failure and do not publish
+a partial output directory. No maneuvers or policy training occur in this run.
 
 ## Python API
 

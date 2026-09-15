@@ -116,3 +116,7 @@ smallest passing neighborhood and then the largest passing decision interval.
 The exact selected pair is audited on held-out validation data without fallback
 selection, producing separate calibration, validation, and final acceptance
 statuses.
+The `oz calibrate` command now orchestrates the complete offline workflow once,
+publishes deterministic versioned evidence in an atomic run directory, reports
+stage progress and runtime, refuses accidental overwrite, and distinguishes a
+calibration no-pass from held-out validation rejection through its exit status.
