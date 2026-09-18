@@ -60,3 +60,17 @@ def test_run_directory_contains_reproducibility_files(tmp_path):
 @requires_torch
 def test_device_selection_returns_a_supported_torch_device():
     assert select_device().type in {"cpu", "cuda", "mps"}
+
+
+def test_environment_defaults_match_calibration():
+    config = EnvironmentConfig()
+
+    assert config.neighborhood_size == 1
+    assert config.decision_interval_seconds == 120.0
+
+
+def test_toy_config_uses_calibrated_values():
+    config = ExperimentConfig.load(Path(__file__).resolve().parents[1] / "configs" / "mappo_toy.json")
+
+    assert config.environment.neighborhood_size == 1
+    assert config.environment.decision_interval_seconds == 120.0

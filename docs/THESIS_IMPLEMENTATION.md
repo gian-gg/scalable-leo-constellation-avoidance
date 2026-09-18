@@ -44,8 +44,9 @@ Every run must save:
 Apple Metal (MPS), otherwise CPU. The choice is recorded for each run.
 
 The initial configuration is [configs/mappo_toy.json](../configs/mappo_toy.json).
-It fixes the architectural defaults—not final experimental values—to 16 agents,
-four local neighbors, seven discrete actions, and a 300-second decision interval.
+It uses 16 agents, seven discrete actions, and the calibrated neighborhood size
+`k = 1` and decision interval of 120 seconds (see
+[calibration findings](HYPERPARAMETER_CALIBRATION_FINDINGS.md)).
 Its maneuver values are provisional development defaults and will be selected by
 bounded sensitivity analysis before final experiments.
 

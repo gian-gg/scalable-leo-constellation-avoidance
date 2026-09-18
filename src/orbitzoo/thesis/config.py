@@ -27,8 +27,8 @@ class EnvironmentConfig:
     """Parameters that define one simulation environment."""
 
     num_agents: int = 16
-    neighborhood_size: int = 4
-    decision_interval_seconds: float = 300.0
+    neighborhood_size: int = 1
+    decision_interval_seconds: float = 120.0
     episode_horizon: int = 100
 
     def validate(self) -> None:

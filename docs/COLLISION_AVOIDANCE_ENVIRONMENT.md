@@ -59,6 +59,10 @@ simultaneous action IDs
         -> individual rewards, shared termination, diagnostics
 ```
 
+`decision_interval_seconds` (default 120 s) is the propagation length of every
+step, independent of OrbitZoo's `step_size`. The maximum burn duration must fit
+inside it.
+
 The maneuver conversion uses the [maneuver contract](MANEUVER_CONTRACT.md): a
 non-no-op direction becomes a finite constant-thrust burn. Fuel consumed and
 realized delta-v are measured from spacecraft mass before and after propagation.

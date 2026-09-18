@@ -47,7 +47,8 @@ class CollisionAvoidanceEnv(OrbitZoo):
         maneuver_config: ManeuverConfig,
         safety_config: SafetyConfig | None = None,
         reward_config: RewardConfig | None = None,
-        neighborhood_size: int = 4,
+        neighborhood_size: int = 1,
+        decision_interval_seconds: float = 120.0,
         episode_horizon: int = 100,
         **orbitzoo_kwargs: Any,
     ) -> None:
@@ -55,7 +56,12 @@ class CollisionAvoidanceEnv(OrbitZoo):
             raise ValueError("CollisionAvoidanceEnv requires OrbitZoo's Orekit dynamics")
         if episode_horizon <= 0:
             raise ValueError("episode_horizon must be positive")
+        if decision_interval_seconds <= 0:
+            raise ValueError("decision_interval_seconds must be positive")
         maneuver_config.validate()
+        if maneuver_config.maximum_burn_duration_seconds > decision_interval_seconds:
+            raise ValueError("maximum_burn_duration_seconds cannot exceed decision_interval_seconds")
+        self.decision_interval_seconds = decision_interval_seconds
         self.maneuver_config = maneuver_config
         self.safety_config = safety_config or SafetyConfig()
         self.reward_config = reward_config or RewardConfig()
@@ -173,7 +179,11 @@ class CollisionAvoidanceEnv(OrbitZoo):
         thrusts, durations = orbitzoo_action_inputs(commands)
         spacecraft_before = self._spacecraft_by_name()
         masses_before = {name: spacecraft_before[name].get_mass() for name in self.agent_names}
-        super().step(actions=thrusts, maneuver_durations=durations)
+        super().step(
+            step_size=self.decision_interval_seconds,
+            actions=thrusts,
+            maneuver_durations=durations,
+        )
         spacecraft_after = self._spacecraft_by_name()
         results = {
             name: measure_maneuver_result(

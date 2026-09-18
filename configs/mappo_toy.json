@@ -1,8 +1,8 @@
 {
   "environment": {
-    "decision_interval_seconds": 300.0,
+    "decision_interval_seconds": 120.0,
     "episode_horizon": 100,
-    "neighborhood_size": 4,
+    "neighborhood_size": 1,
     "num_agents": 16
   },
   "maneuver": {
