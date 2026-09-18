@@ -74,6 +74,8 @@ The [training loop](TRAINING.md) (`oz train`) trains the shared policy on the
 environment, with time-limit bootstrapping, per-update metrics, TensorBoard logs,
 checkpoints, and exact resume. Its scenario source is pluggable; only the
 development fixture exists until the training scenarios are built.
+[Evaluation](EVALUATION.md) (`oz evaluate`) compares trained checkpoints with
+no-op and rule-based Clohessy–Wiltshire baselines on identical held-out episodes.
 
 The actor now receives fixed-width, threat-ranked local observations containing
 `k` relative-neighbour blocks with explicit padding masks. The critic receives

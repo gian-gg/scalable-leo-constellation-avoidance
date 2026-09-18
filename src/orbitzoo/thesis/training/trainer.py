@@ -19,6 +19,7 @@ import torch
 from orbitzoo.rl_algorithms.mappo import MAPPO
 from orbitzoo.thesis.config import ExperimentConfig
 from orbitzoo.thesis.environments.collision_avoidance import CollisionAvoidanceEnv
+from orbitzoo.thesis.environments.episodes import EpisodeSummary, StepOutputs, play_episode
 from orbitzoo.thesis.environments.scenarios import build_environment
 from orbitzoo.thesis.runtime import select_device
 
@@ -41,18 +42,6 @@ METRIC_FIELDS = (
     *LOSS_FIELDS,
     "update_seconds",
 )
-
-
-@dataclass(frozen=True)
-class EpisodeSummary:
-    """Outcome of one complete training episode."""
-
-    mean_agent_return: float
-    length: int
-    ended_in_collision: bool
-    unsafe_agent_steps: int
-    mean_delta_v_per_agent_mps: float
-    minimum_separation_meters: float
 
 
 @dataclass(frozen=True)
@@ -92,41 +81,23 @@ def _build_policy(config: ExperimentConfig, env: CollisionAvoidanceEnv) -> MAPPO
     )
 
 
-def _reset(env: CollisionAvoidanceEnv, seed: int) -> tuple[np.ndarray, np.ndarray]:
-    # OrbitZoo's reset reseeds torch globally; keep the policy's sampling stream intact.
-    rng_state = torch.get_rng_state()
-    observations = env.reset(seed=seed)
-    torch.set_rng_state(rng_state)
-    return observations
-
-
 def run_episode(policy: MAPPO, env: CollisionAvoidanceEnv, seed: int) -> EpisodeSummary:
     """Play one episode with the stochastic policy and store every transition."""
-    local, global_state = _reset(env, seed)
-    agent_names = set(env.agent_names)
-    total_reward = np.zeros(env.num_agents, dtype=np.float64)
-    unsafe_agent_steps = 0
-    while True:
-        actions, log_probabilities, values = policy.act(local, global_state)
-        next_local, next_global, rewards, dones, info = env.step(actions.numpy())
-        total_reward += rewards
-        unsafe_agent_steps += len(agent_names & {name for pair in info["unsafe_pairs"] for name in pair})
-        stored_rewards = rewards
+    pending: dict[str, torch.Tensor] = {}
+
+    def choose(local: np.ndarray, global_state: np.ndarray) -> np.ndarray:
+        actions, pending["log_probabilities"], pending["values"] = policy.act(local, global_state)
+        return actions.numpy()
+
+    def store(local: np.ndarray, global_state: np.ndarray, actions: np.ndarray, outputs: StepOutputs) -> None:
+        next_local, next_global, rewards, dones, info = outputs
         if info["termination_reason"] == "horizon":
-            stored_rewards = rewards + policy.gamma * policy.values(next_local, next_global).numpy()
-        policy.store_step(local, global_state, actions, log_probabilities, stored_rewards, dones, values)
-        local, global_state = next_local, next_global
-        if dones.all():
-            break
-    diagnostics = env.diagnostics
-    return EpisodeSummary(
-        mean_agent_return=float(total_reward.mean()),
-        length=env.step_index,
-        ended_in_collision=info["termination_reason"] == "collision",
-        unsafe_agent_steps=unsafe_agent_steps,
-        mean_delta_v_per_agent_mps=float(np.mean(list(diagnostics.cumulative_delta_v_mps.values()))),
-        minimum_separation_meters=diagnostics.minimum_separation_meters,
-    )
+            rewards = rewards + policy.gamma * policy.values(next_local, next_global).numpy()
+        policy.store_step(
+            local, global_state, actions, pending["log_probabilities"], rewards, dones, pending["values"]
+        )
+
+    return play_episode(env, seed, choose, store)
 
 
 def _update_metrics(

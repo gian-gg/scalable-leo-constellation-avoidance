@@ -446,6 +446,21 @@ class MAPPO(RLAlgorithm):
         destination.parent.mkdir(parents=True, exist_ok=True)
         torch.save(self.checkpoint(), destination)
 
+    @classmethod
+    def from_checkpoint(cls, checkpoint_path: str | Path, device: torch.device | str | None = None) -> "MAPPO":
+        """Build a MAPPO instance with the checkpoint's architecture and load its weights."""
+        checkpoint = torch.load(Path(checkpoint_path), map_location="cpu", weights_only=False)
+        policy = cls(
+            local_observation_dim=checkpoint["local_observation_dim"],
+            global_state_dim=checkpoint["global_state_dim"],
+            num_actions=checkpoint["num_actions"],
+            actor_hidden_dims=checkpoint["actor_hidden_dims"],
+            critic_hidden_dims=checkpoint["critic_hidden_dims"],
+            device=device,
+        )
+        policy.load(checkpoint_path)
+        return policy
+
     def load(self, checkpoint_path: str | Path) -> None:
         """Restore a checkpoint into a MAPPO instance with matching dimensions."""
         checkpoint = torch.load(Path(checkpoint_path), map_location=self.device, weights_only=False)
