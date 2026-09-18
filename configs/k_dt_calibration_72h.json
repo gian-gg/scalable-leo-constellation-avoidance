@@ -1,0 +1,67 @@
+{
+  "catalog": {
+    "default_radius_meters": 1.0,
+    "maximum_altitude_meters": 2000000.0,
+    "maximum_tle_age_days": 14.0,
+    "metadata_path": "../data/tle/objects.csv",
+    "minimum_altitude_meters": 200000.0,
+    "tle_path": "../data/tle/catalog.tle"
+  },
+  "passing_thresholds": {
+    "minimum_decisions_before_tca": 3,
+    "minimum_threat_recall": 0.999,
+    "minimum_timely_detection_fraction": 0.99
+  },
+  "propagation": {
+    "coarse_step_seconds": 60,
+    "duration_seconds": 259200,
+    "fine_window_padding_seconds": 60,
+    "maximum_relative_speed_mps": 20000.0,
+    "reference_step_seconds": 10,
+    "start_epoch_mode": "latest_tle_epoch"
+  },
+  "safety": {
+    "safe_separation_meters": 1000.0,
+    "screening_horizon_seconds": 1800.0
+  },
+  "schema_version": 1,
+  "sweep": {
+    "agent_counts": [
+      16,
+      64,
+      256
+    ],
+    "calibration_seeds": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "decision_intervals_seconds": [
+      60,
+      120,
+      300,
+      600
+    ],
+    "neighborhood_sizes": [
+      1,
+      2,
+      4,
+      8,
+      16
+    ],
+    "validation_seeds": [
+      100,
+      101,
+      102,
+      103,
+      104
+    ]
+  }
+}
