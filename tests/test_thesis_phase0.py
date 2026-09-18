@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from orbitzoo.thesis.config import EnvironmentConfig, ExperimentConfig
+from orbitzoo.thesis.config import EnvironmentConfig, ExperimentConfig, TrainingConfig
 from orbitzoo.thesis.runtime import create_run_directory, select_device
 
 
@@ -74,3 +74,36 @@ def test_toy_config_uses_calibrated_values():
 
     assert config.environment.neighborhood_size == 1
     assert config.environment.decision_interval_seconds == 120.0
+
+
+def test_training_config_round_trips_tuples_and_old_files_still_load(tmp_path):
+    config = ExperimentConfig(training=TrainingConfig(actor_hidden_dims=[32, 16]))
+    config_path = tmp_path / "config.json"
+    config.save(config_path)
+    assert ExperimentConfig.load(config_path) == config
+    assert config.training.actor_hidden_dims == (32, 16)
+
+    raw = json.loads(config_path.read_text())
+    raw["training"] = {"rollout_steps": 64}
+    del raw["environment"]["scenario"]
+    config_path.write_text(json.dumps(raw))
+    legacy = ExperimentConfig.load(config_path)
+    assert legacy.training.total_updates == TrainingConfig().total_updates
+    assert legacy.environment.scenario == "development"
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"total_updates": 0},
+        {"minibatch_size": 0},
+        {"actor_hidden_dims": ()},
+        {"critic_hidden_dims": (32, 0)},
+        {"entropy_coefficient": -0.1},
+        {"value_clip": 0.0},
+        {"device": "tpu"},
+    ],
+)
+def test_invalid_training_config_is_rejected(overrides):
+    with pytest.raises(ValueError):
+        TrainingConfig(**overrides).validate()

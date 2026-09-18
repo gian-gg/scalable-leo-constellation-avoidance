@@ -1,9 +1,9 @@
 {
   "environment": {
     "decision_interval_seconds": 120.0,
-    "episode_horizon": 100,
+    "episode_horizon": 10,
     "neighborhood_size": 1,
-    "num_agents": 16,
+    "num_agents": 4,
     "scenario": "development"
   },
   "maneuver": {
@@ -33,27 +33,21 @@
   "schema_version": 1,
   "seed": 42,
   "training": {
-    "actor_hidden_dims": [
-      128,
-      64
-    ],
+    "actor_hidden_dims": [32],
     "actor_learning_rate": 0.0003,
-    "checkpoint_interval": 10,
-    "critic_hidden_dims": [
-      256,
-      128
-    ],
+    "checkpoint_interval": 1,
+    "critic_hidden_dims": [32],
     "critic_learning_rate": 0.001,
     "device": "cpu",
     "entropy_coefficient": 0.01,
     "gae_lambda": 0.95,
     "gamma": 0.99,
     "max_gradient_norm": 0.5,
-    "minibatch_size": 256,
+    "minibatch_size": 64,
     "ppo_clip": 0.2,
-    "rollout_steps": 2048,
-    "total_updates": 500,
-    "update_epochs": 4,
+    "rollout_steps": 40,
+    "total_updates": 2,
+    "update_epochs": 2,
     "value_clip": 0.2,
     "value_coefficient": 0.5
   }

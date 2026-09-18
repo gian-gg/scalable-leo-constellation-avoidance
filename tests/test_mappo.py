@@ -128,3 +128,11 @@ def test_rollout_rejects_agent_count_changes(algorithm):
             torch.zeros(3, dtype=torch.bool),
             values[:3],
         )
+
+
+def test_values_match_the_critic_for_every_agent(algorithm):
+    local_observations, global_state = sample_state()
+
+    _, _, act_values = algorithm.act(local_observations, global_state)
+
+    torch.testing.assert_close(algorithm.values(local_observations, global_state), act_values)

@@ -30,8 +30,11 @@ class EnvironmentConfig:
     neighborhood_size: int = 1
     decision_interval_seconds: float = 120.0
     episode_horizon: int = 100
+    scenario: str = "development"
 
     def validate(self) -> None:
+        if not self.scenario:
+            raise ValueError("scenario must be a non-empty name")
         if self.num_agents < 2:
             raise ValueError("num_agents must be at least 2")
         if self.neighborhood_size <= 0:
@@ -64,9 +67,12 @@ class PolicyConfig:
                 raise ValueError(f"{name} must be positive when specified")
 
 
+TRAINING_DEVICES = ("cpu", "cuda", "mps", "auto")
+
+
 @dataclass(frozen=True)
 class TrainingConfig:
-    """Initial MAPPO hyperparameters; later phases may extend this schema."""
+    """MAPPO hyperparameters and training-run schedule."""
 
     rollout_steps: int = 2048
     actor_learning_rate: float = 3e-4
@@ -74,10 +80,36 @@ class TrainingConfig:
     gamma: float = 0.99
     gae_lambda: float = 0.95
     ppo_clip: float = 0.2
+    total_updates: int = 500
+    update_epochs: int = 4
+    minibatch_size: int = 256
+    actor_hidden_dims: tuple[int, ...] = (128, 64)
+    critic_hidden_dims: tuple[int, ...] = (256, 128)
+    entropy_coefficient: float = 0.01
+    value_coefficient: float = 0.5
+    value_clip: float = 0.2
+    max_gradient_norm: float = 0.5
+    checkpoint_interval: int = 10
+    device: str = "cpu"
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "actor_hidden_dims", tuple(self.actor_hidden_dims))
+        object.__setattr__(self, "critic_hidden_dims", tuple(self.critic_hidden_dims))
 
     def validate(self) -> None:
-        if self.rollout_steps <= 0:
-            raise ValueError("rollout_steps must be positive")
+        for name in ("rollout_steps", "total_updates", "update_epochs", "minibatch_size", "checkpoint_interval"):
+            if getattr(self, name) <= 0:
+                raise ValueError(f"{name} must be positive")
+        for name in ("actor_hidden_dims", "critic_hidden_dims"):
+            dims = getattr(self, name)
+            if not dims or any(dim <= 0 for dim in dims):
+                raise ValueError(f"{name} must be a non-empty list of positive sizes")
+        if self.value_clip <= 0 or self.max_gradient_norm <= 0:
+            raise ValueError("value_clip and max_gradient_norm must be positive")
+        if self.entropy_coefficient < 0 or self.value_coefficient < 0:
+            raise ValueError("entropy_coefficient and value_coefficient cannot be negative")
+        if self.device not in TRAINING_DEVICES:
+            raise ValueError(f"device must be one of {TRAINING_DEVICES}")
         if self.actor_learning_rate <= 0 or self.critic_learning_rate <= 0:
             raise ValueError("learning rates must be positive")
         if not 0 < self.gamma <= 1:

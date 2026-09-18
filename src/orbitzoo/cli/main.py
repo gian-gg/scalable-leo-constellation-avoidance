@@ -7,6 +7,7 @@ from orbitzoo.cli.catalog import add_catalog_parser
 from orbitzoo.cli.demo import add_demo_parser
 from orbitzoo.cli.missions import add_mission_parsers
 from orbitzoo.cli.run_file import add_run_parser
+from orbitzoo.cli.train import add_train_parser
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -21,6 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_mission_parsers(subparsers)
     add_catalog_parser(subparsers)
     add_calibrate_parser(subparsers)
+    add_train_parser(subparsers)
     return parser
 
 

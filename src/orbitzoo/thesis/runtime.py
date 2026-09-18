@@ -66,6 +66,13 @@ def create_run_directory(
     timestamp = (now or datetime.now(timezone.utc)).strftime("%Y-%m-%d_%H%M%SZ")
     safe_label = "".join(char if char.isalnum() or char in "-_" else "-" for char in label)
     run_directory = Path(project_root) / "runs" / f"{timestamp}_{safe_label}_seed{config.seed}"
+    return initialize_run_directory(run_directory, config)
+
+
+def initialize_run_directory(run_directory: str | Path, config: ExperimentConfig) -> Path:
+    """Create a new run directory holding the config and execution metadata."""
+    config.validate()
+    run_directory = Path(run_directory)
     run_directory.mkdir(parents=True, exist_ok=False)
     config.save(run_directory / "config.json")
     (run_directory / "tensorboard").mkdir()

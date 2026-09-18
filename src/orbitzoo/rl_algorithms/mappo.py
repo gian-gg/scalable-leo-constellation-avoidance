@@ -257,6 +257,18 @@ class MAPPO(RLAlgorithm):
             values = self.critic(self._critic_inputs(observations, state)).squeeze(-1)
         return actions.cpu(), log_probabilities.cpu(), values.cpu()
 
+    def values(
+        self,
+        local_observations: Tensor | np.ndarray | Sequence[Sequence[float]],
+        global_state: Tensor | np.ndarray | Sequence[float],
+    ) -> Tensor:
+        """Return the critic's per-agent value estimates without tracking gradients."""
+        observations = self._local_tensor(local_observations)
+        state = self._global_tensor(global_state)
+        self.critic.eval()
+        with torch.no_grad():
+            return self._values_for(observations, state).cpu()
+
     def select_actions(
         self,
         local_observations: Tensor | np.ndarray | Sequence[Sequence[float]],

@@ -70,6 +70,11 @@ reward table (see [verification](COLLISION_AVOIDANCE_ENVIRONMENT.md#verification
 Bodies are now created at the configured initial epoch, so real calendar epochs
 propagate correctly.
 
+The [training loop](TRAINING.md) (`oz train`) trains the shared policy on the
+environment, with time-limit bootstrapping, per-update metrics, TensorBoard logs,
+checkpoints, and exact resume. Its scenario source is pluggable; only the
+development fixture exists until the training scenarios are built.
+
 The actor now receives fixed-width, threat-ranked local observations containing
 `k` relative-neighbour blocks with explicit padding masks. The critic receives
 a separate, deterministic full-system training state. This makes the deployed
