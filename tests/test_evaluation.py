@@ -129,8 +129,8 @@ def test_rule_widens_the_development_conjunction_compared_with_noop() -> None:
     config = dataclasses.replace(config, maneuver=LARGE_MANEUVER)
     env = build_environment(config)
 
-    [coasting] = evaluate_policy(build_policy("noop", config, env), env, [0])
-    [avoiding] = evaluate_policy(build_policy("rule", config, env), env, [0])
+    [coasting] = evaluate_policy(build_policy("noop", config, env.local_observation_dim), env, [0])
+    [avoiding] = evaluate_policy(build_policy("rule", config, env.local_observation_dim), env, [0])
 
     assert coasting.mean_delta_v_per_agent_mps == 0.0
     assert avoiding.mean_delta_v_per_agent_mps > 0.0
@@ -149,7 +149,7 @@ def test_checkpoint_policy_rebuilds_its_architecture(smoke_checkpoint: Path) -> 
     config = ExperimentConfig.load(SMOKE_CONFIG)
     env = build_environment(config)
 
-    policy = build_policy(f"smoke={smoke_checkpoint}", config, env)
+    policy = build_policy(f"smoke={smoke_checkpoint}", config, env.local_observation_dim)
 
     assert policy.name == "smoke"
     assert isinstance(policy.policy, MAPPO)

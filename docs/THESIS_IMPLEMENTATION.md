@@ -76,6 +76,9 @@ checkpoints, and exact resume. Its scenario source is pluggable; only the
 development fixture exists until the training scenarios are built.
 [Evaluation](EVALUATION.md) (`oz evaluate`) compares trained checkpoints with
 no-op and rule-based Clohessy–Wiltshire baselines on identical held-out episodes.
+The [scalability evaluation](SCALABILITY.md) (`oz scale`) runs the frozen actor
+against the full TLE catalog, sweeping catalog size and agent count, and reports
+conjunctions, maneuver-induced secondary conjunctions, delta-v, and per-stage cost.
 
 The actor now receives fixed-width, threat-ranked local observations containing
 `k` relative-neighbour blocks with explicit padding masks. The critic receives

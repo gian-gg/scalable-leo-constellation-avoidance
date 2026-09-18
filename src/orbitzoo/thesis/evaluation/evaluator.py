@@ -54,7 +54,7 @@ def evaluation_seeds(config: ExperimentConfig, episodes: int) -> list[int]:
     return list(range(start, start + episodes))
 
 
-def build_policy(spec: str, config: ExperimentConfig, env: CollisionAvoidanceEnv) -> EvaluationPolicy:
+def build_policy(spec: str, config: ExperimentConfig, local_observation_dim: int) -> EvaluationPolicy:
     """Create a policy from ``noop``, ``rule``, ``PATH`` or ``NAME=PATH`` to a MAPPO checkpoint."""
     if spec == "noop":
         return NoOpPolicy()
@@ -65,10 +65,10 @@ def build_policy(spec: str, config: ExperimentConfig, env: CollisionAvoidanceEnv
     if not checkpoint.is_file():
         raise FileNotFoundError(f"policy {spec!r} is not noop, rule, or an existing checkpoint")
     policy = MAPPO.from_checkpoint(checkpoint)
-    if policy.local_observation_dim != env.local_observation_dim:
+    if policy.local_observation_dim != local_observation_dim:
         raise ValueError(
             f"checkpoint expects local observations of width {policy.local_observation_dim}, "
-            f"but the environment produces {env.local_observation_dim}"
+            f"but the environment produces {local_observation_dim}"
         )
     return MAPPOActorPolicy(policy, name or "mappo")
 
@@ -118,7 +118,7 @@ def evaluate(
         raise ValueError("at least one policy is required")
     seeds = evaluation_seeds(config, episodes)
     env = build_environment(config)
-    policies = [build_policy(spec, config, env) for spec in policy_specs]
+    policies = [build_policy(spec, config, env.local_observation_dim) for spec in policy_specs]
     names = [policy.name for policy in policies]
     if len(set(names)) != len(names):
         raise ValueError(f"policy names must be unique: {names}")
