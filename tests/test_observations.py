@@ -118,3 +118,21 @@ def test_actor_width_does_not_depend_on_population_size() -> None:
     assert small_state.local_observations.shape[1] == encoder.local_observation_dim
     assert large_state.local_observations.shape[1] == encoder.local_observation_dim
     assert small_state.global_state.shape != large_state.global_state.shape
+
+
+def test_local_rows_do_not_depend_on_body_input_order() -> None:
+    config = SafetyConfig()
+    encoder = LocalObservationEncoder(neighborhood_size=2, safety_config=config)
+    bodies = [
+        body("agent_1", [7_000_000, 0, 0], [0, 7_500, 0], fuel=10, initial_fuel=20),
+        body("agent_2", [7_000_800, 0, 0], [0, 7_500, 0], fuel=15, initial_fuel=20),
+        body("debris", [7_000_000, 3_000, 0], [0, 7_480, 0]),
+    ]
+
+    forward = encoder.encode(bodies, ["agent_1", "agent_2"])
+    reversed_bodies = encoder.encode(bodies[::-1], ["agent_1", "agent_2"])
+    swapped_agents = encoder.encode(bodies, ["agent_2", "agent_1"])
+
+    np.testing.assert_array_equal(forward.local_observations, reversed_bodies.local_observations)
+    np.testing.assert_array_equal(forward.global_state, reversed_bodies.global_state)
+    np.testing.assert_array_equal(forward.local_observations[::-1], swapped_agents.local_observations)

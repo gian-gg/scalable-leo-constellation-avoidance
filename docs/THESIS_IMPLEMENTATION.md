@@ -64,6 +64,12 @@ The [collision-avoidance environment](COLLISION_AVOIDANCE_ENVIRONMENT.md)
 connects that contract to OrbitZoo propagation, deterministic conjunction
 screening, rewards, episode termination, and diagnostics.
 
+The environment is verified end to end on Orekit: action directions, burn
+displacement, fuel and delta-v accounting, determinism, termination, and the full
+reward table (see [verification](COLLISION_AVOIDANCE_ENVIRONMENT.md#verification)).
+Bodies are now created at the configured initial epoch, so real calendar epochs
+propagate correctly.
+
 The actor now receives fixed-width, threat-ranked local observations containing
 `k` relative-neighbour blocks with explicit padding masks. The critic receives
 a separate, deterministic full-system training state. This makes the deployed

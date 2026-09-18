@@ -214,8 +214,8 @@ class OrekitBody(Body):
         self.integrator = params['integrator'] if 'integrator' in params else 'dopri'
 
         uncertainty = np.array(params['initial_uncertainty']) if 'initial_uncertainty' in params else np.array([1e-10, 1e-10, 1e-10, 1e-10, 1e-10, 1e-10])
-        mean = torch.tensor(self.initial_state, dtype=torch.float32)
-        covariance = torch.diag(torch.tensor(uncertainty**2, dtype=torch.float32))
+        mean = torch.tensor(self.initial_state, dtype=torch.float64)
+        covariance = torch.diag(torch.tensor(uncertainty**2, dtype=torch.float64))
         self.initial_state_dist = MultivariateNormal(mean, covariance)
 
         self.orbit_type = OrbitType.CARTESIAN
@@ -232,7 +232,7 @@ class OrekitBody(Body):
         elements = self.initial_state_dist.sample().detach().numpy()
         elements = [float(element) for element in elements]
         coordinates = PVCoordinates(Vector3D(elements[0], elements[1], elements[2]), Vector3D(elements[3], elements[4], elements[5]))
-        return CartesianOrbit(coordinates, INERTIAL_FRAME, AbsoluteDate(), MU)
+        return CartesianOrbit(coordinates, INERTIAL_FRAME, self.initial_epoch, MU)
     
     def get_covariance_matrix(self, state = None):
         """

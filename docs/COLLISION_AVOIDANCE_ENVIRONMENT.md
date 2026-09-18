@@ -105,3 +105,22 @@ object in a small deterministic 500 km circular-orbit setup. The debris begins
 near the first spacecraft with a closing along-track velocity. Use it for smoke
 tests and interface development only. It is deliberately not a final training
 scenario generator or an evaluation benchmark.
+
+## Verification
+
+The test suite runs the environment end to end on Orekit and checks:
+
+- each non-no-op action changes velocity along its RSW direction, confirming that
+  Orekit's `LVLH` thrust frame matches the action contract;
+- a prograde burn displaces the spacecraft as the Clohessy–Wiltshire equations
+  predict, and a coasting spacecraft stays on the analytic circular orbit;
+- reported fuel and delta-v equal the Orekit mass change, and episode diagnostics
+  sum them correctly;
+- equal seeds and actions give bit-identical episodes;
+- infeasible actions coast, horizon and collision end the episode for every agent,
+  and invalid action arrays are rejected;
+- every reward outcome (coast, unnecessary burn, unresolved, resolved, collision,
+  rejected action) and every screening boundary case.
+
+See `tests/test_collision_avoidance_env.py`, `tests/test_rewards.py`, and
+`tests/test_safety.py`.
