@@ -13,10 +13,10 @@ from orbitzoo.thesis.maneuvers.contract import ManeuverConfig
 
 
 def default_maneuver_config() -> ManeuverConfig:
-    """Return provisional maneuver defaults for development and test runs."""
+    """Return the maneuver selected by the sizing study (docs/MANEUVER_SIZING_FINDINGS.md)."""
     return ManeuverConfig(
-        commanded_delta_v_mps=0.01,
-        maximum_thrust_newtons=0.1,
+        commanded_delta_v_mps=0.5,
+        maximum_thrust_newtons=7.0,
         specific_impulse_seconds=300.0,
         maximum_burn_duration_seconds=60.0,
     )

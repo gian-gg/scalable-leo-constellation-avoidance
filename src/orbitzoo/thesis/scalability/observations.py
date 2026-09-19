@@ -6,6 +6,7 @@ Produces the same rows as ``LocalObservationEncoder`` without building body obje
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Iterator
 
 import numpy as np
 
@@ -41,6 +42,84 @@ def rsw_bases(positions: np.ndarray, velocities: np.ndarray) -> np.ndarray:
     return np.stack((radial, along_track, cross_track), axis=1)
 
 
+@dataclass(frozen=True)
+class RankedBatch:
+    """Screening quantities for one batch of agents and their ranked neighbours."""
+
+    start: int
+    relative_positions: np.ndarray
+    relative_velocities: np.ndarray
+    tca: np.ndarray
+    miss: np.ndarray
+    combined_radii: np.ndarray
+    neighbors: list[np.ndarray]
+
+
+def ranked_batches(
+    state: CatalogState,
+    agent_indices: np.ndarray,
+    retained: int,
+    safety: SafetyConfig,
+    agent_batch_size: int = DEFAULT_AGENT_BATCH_SIZE,
+) -> Iterator[RankedBatch]:
+    """Rank every object for each agent with the training encoder's threat order."""
+    horizon = safety.screening_horizon_seconds
+    object_order = np.arange(state.positions.shape[0])
+    for start in range(0, agent_indices.size, agent_batch_size):
+        batch = agent_indices[start : start + agent_batch_size]
+        rows = np.arange(batch.size)
+        relative_positions = state.positions[np.newaxis, :, :] - state.positions[batch, np.newaxis, :]
+        relative_velocities = state.velocities[np.newaxis, :, :] - state.velocities[batch, np.newaxis, :]
+        separations = np.linalg.norm(relative_positions, axis=2)
+        speed_squared = np.einsum("bij,bij->bi", relative_velocities, relative_velocities)
+        closing = np.einsum("bij,bij->bi", relative_positions, relative_velocities)
+        tca = np.zeros_like(closing)
+        np.divide(-closing, speed_squared, out=tca, where=speed_squared > 1e-12)
+        tca = np.clip(tca, 0.0, horizon)
+        miss = np.linalg.norm(relative_positions + relative_velocities * tca[:, :, np.newaxis], axis=2)
+        combined_radii = state.radii[np.newaxis, :] + state.radii[batch, np.newaxis]
+        not_collision = ~(separations <= combined_radii)
+        not_unsafe = ~(miss <= safety.safe_separation_meters)
+        not_collision[rows, batch] = True
+        not_unsafe[rows, batch] = True
+        miss[rows, batch] = np.inf
+        tca[rows, batch] = np.inf
+
+        # Monotone scalar key for (collision, unsafe, miss); exact ties are re-sorted below.
+        priority = (not_collision.astype(np.float64) * 2 + not_unsafe) * 1e12 + miss
+        priority[rows, batch] = np.inf
+        cutoff = np.partition(priority, retained - 1, axis=1)[:, retained - 1]
+        neighbors = []
+        for row in rows:
+            candidates = np.flatnonzero(priority[row] <= cutoff[row])
+            order = np.lexsort(
+                (
+                    object_order[candidates],
+                    tca[row, candidates],
+                    miss[row, candidates],
+                    not_unsafe[row, candidates],
+                    not_collision[row, candidates],
+                )
+            )
+            neighbors.append(candidates[order[:retained]])
+        yield RankedBatch(start, relative_positions, relative_velocities, tca, miss, combined_radii, neighbors)
+
+
+def top_neighbors(
+    state: CatalogState, agent_indices: np.ndarray, neighborhood_size: int, safety: SafetyConfig
+) -> np.ndarray:
+    """Indices of each agent's top-``k`` ranked neighbours, padded with -1."""
+    agent_indices = np.asarray(agent_indices, dtype=np.intp)
+    result = np.full((agent_indices.size, neighborhood_size), -1, dtype=np.intp)
+    retained = min(neighborhood_size, state.positions.shape[0] - 1)
+    if retained <= 0:
+        return result
+    for ranked in ranked_batches(state, agent_indices, retained, safety):
+        for row, neighbors in enumerate(ranked.neighbors):
+            result[ranked.start + row, : neighbors.size] = neighbors
+    return result
+
+
 def encode_local_observations(
     state: CatalogState,
     agent_indices: np.ndarray,
@@ -63,53 +142,18 @@ def encode_local_observations(
 
     horizon = safety.screening_horizon_seconds
     safe_separation = safety.safe_separation_meters
-    object_order = np.arange(object_count)
     bases = rsw_bases(state.positions[agent_indices], state.velocities[agent_indices])
-    for start in range(0, agent_indices.size, agent_batch_size):
-        batch = agent_indices[start : start + agent_batch_size]
-        rows = np.arange(batch.size)
-        relative_positions = state.positions[np.newaxis, :, :] - state.positions[batch, np.newaxis, :]
-        relative_velocities = state.velocities[np.newaxis, :, :] - state.velocities[batch, np.newaxis, :]
-        separations = np.linalg.norm(relative_positions, axis=2)
-        speed_squared = np.einsum("bij,bij->bi", relative_velocities, relative_velocities)
-        closing = np.einsum("bij,bij->bi", relative_positions, relative_velocities)
-        tca = np.zeros_like(closing)
-        np.divide(-closing, speed_squared, out=tca, where=speed_squared > 1e-12)
-        tca = np.clip(tca, 0.0, horizon)
-        miss = np.linalg.norm(relative_positions + relative_velocities * tca[:, :, np.newaxis], axis=2)
-        combined_radii = state.radii[np.newaxis, :] + state.radii[batch, np.newaxis]
-        not_collision = ~(separations <= combined_radii)
-        not_unsafe = ~(miss <= safe_separation)
-        not_collision[rows, batch] = True
-        not_unsafe[rows, batch] = True
-        miss[rows, batch] = np.inf
-        tca[rows, batch] = np.inf
-
-        # Monotone scalar key for (collision, unsafe, miss); exact ties are re-sorted below.
-        priority = (not_collision.astype(np.float64) * 2 + not_unsafe) * 1e12 + miss
-        priority[rows, batch] = np.inf
-        cutoff = np.partition(priority, retained - 1, axis=1)[:, retained - 1]
-        for row in rows:
-            candidates = np.flatnonzero(priority[row] <= cutoff[row])
-            order = np.lexsort(
-                (
-                    object_order[candidates],
-                    tca[row, candidates],
-                    miss[row, candidates],
-                    not_unsafe[row, candidates],
-                    not_collision[row, candidates],
-                )
-            )
-            neighbors = candidates[order[:retained]]
-            basis = bases[start + row]
+    for ranked in ranked_batches(state, agent_indices, retained, safety, agent_batch_size):
+        for row, neighbors in enumerate(ranked.neighbors):
+            basis = bases[ranked.start + row]
             for slot, neighbor in enumerate(neighbors):
                 offset = OWN_FEATURE_DIM + slot * NEIGHBOR_FEATURE_DIM
-                block = observations[start + row, offset : offset + NEIGHBOR_FEATURE_DIM]
-                block[0:3] = (basis @ relative_positions[row, neighbor]).astype(np.float32) / POSITION_SCALE_METERS
-                block[3:6] = (basis @ relative_velocities[row, neighbor]).astype(np.float32) / VELOCITY_SCALE_MPS
-                block[6] = tca[row, neighbor] / horizon
-                block[7] = min(miss[row, neighbor] / safe_separation, MAX_NORMALIZED_MISS_DISTANCE)
-                block[8] = combined_radii[row, neighbor] / safe_separation
+                block = observations[ranked.start + row, offset : offset + NEIGHBOR_FEATURE_DIM]
+                block[0:3] = (basis @ ranked.relative_positions[row, neighbor]).astype(np.float32) / POSITION_SCALE_METERS
+                block[3:6] = (basis @ ranked.relative_velocities[row, neighbor]).astype(np.float32) / VELOCITY_SCALE_MPS
+                block[6] = ranked.tca[row, neighbor] / horizon
+                block[7] = min(ranked.miss[row, neighbor] / safe_separation, MAX_NORMALIZED_MISS_DISTANCE)
+                block[8] = ranked.combined_radii[row, neighbor] / safe_separation
                 block[9] = float(state.is_agent[neighbor])
                 block[10] = state.fuel_fractions[neighbor] if state.is_agent[neighbor] else 0.0
                 block[11] = 1.0

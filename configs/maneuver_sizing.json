@@ -1,0 +1,17 @@
+{
+  "calibration_config": "k_dt_calibration_72h.json",
+  "decision_interval_seconds": 120.0,
+  "delta_v_candidates_mps": [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0],
+  "lead_times_seconds": [360.0, 600.0, 1200.0, 1800.0],
+  "maximum_burn_duration_seconds": 60.0,
+  "reference_conjunctions": "../runs/k_dt_calibration_20k_72h/reference_conjunctions.json",
+  "safe_separation_meters": 1000.0,
+  "satellite_masses_kg": [300.0, 800.0],
+  "schema_version": 1,
+  "selection_burns": 3,
+  "selection_lead_seconds": 360.0,
+  "spot_check_events": 12,
+  "spot_check_thrust_newtons": 20.0,
+  "spot_check_tolerance_fraction": 0.05,
+  "target_fraction": 0.95
+}

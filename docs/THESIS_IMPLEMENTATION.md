@@ -47,8 +47,8 @@ The initial configuration is [configs/mappo_toy.json](../configs/mappo_toy.json)
 It uses 16 agents, seven discrete actions, and the calibrated neighborhood size
 `k = 1` and decision interval of 120 seconds (see
 [calibration findings](HYPERPARAMETER_CALIBRATION_FINDINGS.md)).
-Its maneuver values are provisional development defaults and will be selected by
-bounded sensitivity analysis before final experiments.
+Its maneuver is 0.5 m/s per action at up to 7 N, as selected by the
+[maneuver sizing study](MANEUVER_SIZING_FINDINGS.md).
 
 ## Current status
 
@@ -79,6 +79,8 @@ no-op and rule-based Clohessy–Wiltshire baselines on identical held-out episod
 The [scalability evaluation](SCALABILITY.md) (`oz scale`) runs the frozen actor
 against the full TLE catalog, sweeping catalog size and agent count, and reports
 conjunctions, maneuver-induced secondary conjunctions, delta-v, and per-stage cost.
+[Maneuver sizing](MANEUVER_SIZING.md) (`oz size-maneuvers`) derives the per-action
+delta-v and minimum thrust from the reference conjunctions.
 
 The actor now receives fixed-width, threat-ranked local observations containing
 `k` relative-neighbour blocks with explicit padding masks. The critic receives

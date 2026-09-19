@@ -19,7 +19,7 @@ from orbitzoo.thesis.evaluation.policies import (
 from orbitzoo.thesis.maneuvers.contract import ManeuverConfig
 from orbitzoo.thesis.scalability.config import ScalabilityConfig
 from orbitzoo.thesis.scalability.dynamics import inertial_states, mean_motions, propagate_hill_states
-from orbitzoo.thesis.scalability.observations import CatalogState, encode_local_observations
+from orbitzoo.thesis.scalability.observations import CatalogState, encode_local_observations, rsw_bases, top_neighbors
 from orbitzoo.thesis.scalability.runner import build_scenarios, leo_objects, run_scalability
 from orbitzoo.thesis.scalability.screening import (
     ConjunctionEvent,
@@ -310,3 +310,20 @@ def test_scale_command_runs_one_sweep(synthetic_config: Path, tmp_path: Path, ca
 
     output = capsys.readouterr().out
     assert "agents" in output and "catalog" not in output.split("Artifacts")[1].split("\n", 2)[2]
+
+
+def test_top_neighbors_match_the_encoded_first_neighbour() -> None:
+    rng = np.random.default_rng(7)
+    count = 30
+    positions = np.array([7e6, 0, 0]) + rng.normal(0, 3_000, (count, 3))
+    velocities = np.array([0, 7_500, 0]) + rng.normal(0, 20, (count, 3))
+    state = CatalogState(positions, velocities, np.ones(count), np.zeros(count, bool), np.zeros(count))
+    agents = np.arange(5)
+
+    top = top_neighbors(state, agents, 1, SAFETY)[:, 0]
+    encoded = encode_local_observations(state, agents, 1, SAFETY)
+
+    relative = positions[top] - positions[agents]
+    for row, agent in enumerate(agents):
+        basis = rsw_bases(positions[[agent]], velocities[[agent]])[0]
+        np.testing.assert_allclose(encoded[row, 7:10], (basis @ relative[row]).astype(np.float32) / 10_000_000.0)

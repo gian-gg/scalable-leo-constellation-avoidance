@@ -14,10 +14,12 @@ from orbitzoo.thesis.environments.collision_avoidance import (
     development_environment_kwargs,
 )
 from orbitzoo.thesis.environments.scenarios import build_environment
+from orbitzoo.thesis.maneuvers.contract import ManeuverConfig
 from orbitzoo.thesis.runtime import initialize_run_directory
 from orbitzoo.thesis.training.trainer import _build_policy, run_episode, train
 
 SMOKE_CONFIG = Path(__file__).resolve().parents[1] / "configs" / "mappo_smoke.json"
+NEGLIGIBLE_MANEUVER = ManeuverConfig(0.01, 0.1, 300.0, 60.0)
 
 
 def smoke_config(**training_overrides) -> ExperimentConfig:
@@ -96,7 +98,7 @@ def test_collision_steps_are_not_bootstrapped() -> None:
     shadow = dict(kwargs["drifters"][0], name="shadow", initial_state=list(kwargs["spacecrafts"][1]["initial_state"]))
     kwargs["drifters"].append(shadow)
     env = RecordingEnv(
-        CollisionAvoidanceEnv(maneuver_config=config.maneuver, episode_horizon=10, **kwargs)
+        CollisionAvoidanceEnv(maneuver_config=NEGLIGIBLE_MANEUVER, episode_horizon=10, **kwargs)
     )
     policy = _build_policy(config, env.env)
 

@@ -7,9 +7,9 @@
     "scenario": "development"
   },
   "maneuver": {
-    "commanded_delta_v_mps": 0.01,
+    "commanded_delta_v_mps": 0.5,
     "maximum_burn_duration_seconds": 60.0,
-    "maximum_thrust_newtons": 0.1,
+    "maximum_thrust_newtons": 7.0,
     "specific_impulse_seconds": 300.0
   },
   "policy": {
@@ -33,10 +33,14 @@
   "schema_version": 1,
   "seed": 42,
   "training": {
-    "actor_hidden_dims": [32],
+    "actor_hidden_dims": [
+      32
+    ],
     "actor_learning_rate": 0.0003,
     "checkpoint_interval": 1,
-    "critic_hidden_dims": [32],
+    "critic_hidden_dims": [
+      32
+    ],
     "critic_learning_rate": 0.001,
     "device": "cpu",
     "entropy_coefficient": 0.01,

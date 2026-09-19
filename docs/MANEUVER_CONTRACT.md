@@ -56,3 +56,6 @@ environment will record actual fuel use from pre/post-burn mass. Actual delta-v
 is then calculated using the same rocket equation; cumulative actual delta-v is
 an evaluation metric, while the per-maneuver commanded delta-v is a tunable
 design hyperparameter.
+
+The adopted values are 0.5 m/s per maneuver at up to 7 N; see
+[MANEUVER_SIZING_FINDINGS.md](MANEUVER_SIZING_FINDINGS.md).

@@ -25,7 +25,7 @@ def test_config_round_trip(tmp_path):
     config.save(config_path)
 
     assert ExperimentConfig.load(config_path) == config
-    assert config.to_dict()["maneuver"]["commanded_delta_v_mps"] == 0.01
+    assert config.to_dict()["maneuver"]["commanded_delta_v_mps"] == 0.5
 
 
 def test_invalid_neighborhood_is_rejected():
@@ -107,3 +107,13 @@ def test_training_config_round_trips_tuples_and_old_files_still_load(tmp_path):
 def test_invalid_training_config_is_rejected(overrides):
     with pytest.raises(ValueError):
         TrainingConfig(**overrides).validate()
+
+
+def test_maneuver_defaults_match_the_sizing_decision():
+    maneuver = ExperimentConfig().maneuver
+    toy = ExperimentConfig.load(Path(__file__).resolve().parents[1] / "configs" / "mappo_toy.json").maneuver
+
+    assert (maneuver.commanded_delta_v_mps, maneuver.maximum_thrust_newtons) == (0.5, 7.0)
+    assert toy == maneuver
+    heaviest_mass_kg = 800.0
+    assert heaviest_mass_kg * maneuver.commanded_delta_v_mps / maneuver.maximum_thrust_newtons <= maneuver.maximum_burn_duration_seconds

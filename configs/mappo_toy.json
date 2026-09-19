@@ -7,9 +7,9 @@
     "scenario": "development"
   },
   "maneuver": {
-    "commanded_delta_v_mps": 0.01,
+    "commanded_delta_v_mps": 0.5,
     "maximum_burn_duration_seconds": 60.0,
-    "maximum_thrust_newtons": 0.1,
+    "maximum_thrust_newtons": 7.0,
     "specific_impulse_seconds": 300.0
   },
   "policy": {
