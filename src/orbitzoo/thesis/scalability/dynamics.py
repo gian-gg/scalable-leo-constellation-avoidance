@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from orbitzoo.thesis.scalability.observations import rsw_bases
+from orbitzoo.thesis.environments.vectorized_observations import rsw_bases
 
 EARTH_GRAVITATIONAL_PARAMETER = 3.986004418e14
 

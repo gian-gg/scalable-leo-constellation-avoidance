@@ -195,3 +195,14 @@ def test_passing_conjunction_is_reported_with_its_realized_miss() -> None:
     assert set(passed["pair"]) == {"satellite_1", "development_debris"}
     assert 0.0 <= passed["miss_distance_meters"] < env.safety_config.safe_separation_meters
     assert approaches[0] == []
+
+
+def test_environment_observations_match_the_reference_encoder() -> None:
+    env = make_env()
+    env.step(actions(ManeuverAction.PROGRADE))
+
+    local, global_state = env._state()
+    reference = env.observation_encoder.encode(env._moving_bodies(), env.agent_names)
+
+    np.testing.assert_array_equal(local, reference.local_observations)
+    np.testing.assert_array_equal(global_state, reference.global_state)

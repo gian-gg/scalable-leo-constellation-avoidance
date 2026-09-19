@@ -80,7 +80,7 @@ def play_episode(
         burned = {name for name, maneuver in info["maneuvers"].items() if maneuver["action"] != 0}
         for pair in unsafe_agent_pairs:
             pair_maneuvers.setdefault(pair, set()).update(burned & pair)
-        unsafe_agent_pairs = _unsafe_agent_pairs(info["assessments"], agent_names)
+        unsafe_agent_pairs = _unsafe_agent_pairs(info["flagged_assessments"], agent_names)
         last_unsafe_tca.update(unsafe_agent_pairs)
         local, global_state = next_local, next_global
         if dones.all():

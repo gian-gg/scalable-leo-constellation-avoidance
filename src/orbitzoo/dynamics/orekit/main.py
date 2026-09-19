@@ -208,6 +208,7 @@ class OrekitBody(Body):
         self.dry_mass = float(params['dry_mass']) if 'dry_mass' in params else 10.0
         self.initial_epoch = params['initial_epoch']
         self.radius = float(params['radius']) if 'radius' in params else 1.0
+        self.has_covariance = bool(params.get('covariance', True))
         self.surface_area = np.pi * self.radius ** 2
         self.reflection_coef = float(params['reflection_coef']) if 'reflection_coef' in params else 0.0
         self.drag_coef = float(params['drag_coef']) if 'drag_coef' in params else 0.0
@@ -238,6 +239,8 @@ class OrekitBody(Body):
         """
         Get the covariance matrix relative to a state. If no state is provided, it corresponds to the current state of the body.
         """
+        if not self.has_covariance:
+            raise ValueError(f"covariance propagation is disabled for body {self.name!r}")
         if self.current_epoch == self.initial_epoch:
             return self.initial_state_dist.covariance_matrix.detach().numpy().tolist()
         if not state:
@@ -276,8 +279,10 @@ class OrekitBody(Body):
         for force in self.forces:
             propagator.addForceModel(force)
         self.propagator = propagator
-        self.covariance_provider = self.__create_covariance_provider__(covariance_matrix)
-        self.propagator.addAdditionalStateProvider(self.covariance_provider)
+        self.covariance_provider = None
+        if self.has_covariance:
+            self.covariance_provider = self.__create_covariance_provider__(covariance_matrix)
+            self.propagator.addAdditionalStateProvider(self.covariance_provider)
 
     def __create_covariance_provider__(self, covariance_matrix = None):
         """

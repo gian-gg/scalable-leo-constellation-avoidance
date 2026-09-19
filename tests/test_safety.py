@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 from orbitzoo.thesis.environments.safety import (
     SafetyConfig,
@@ -9,6 +10,7 @@ from orbitzoo.thesis.environments.safety import (
     close_approaches_since,
     involved_agents,
     recent_closest_approach,
+    safety_snapshot,
 )
 
 
@@ -104,3 +106,22 @@ def test_involved_agents_returns_both_members_of_flagged_pairs() -> None:
     unsafe = involved_agents(assess_all_pairs(bodies, SafetyConfig()), "is_unsafe")
 
     assert unsafe == {"a", "b"}
+
+
+def test_vectorized_snapshot_matches_the_per_pair_screen() -> None:
+    rng = np.random.default_rng(1)
+    positions = np.array([7e6, 0, 0]) + rng.normal(0, 2_000, (25, 3))
+    velocities = np.array([0, 7_500, 0]) + rng.normal(0, 15, (25, 3))
+    bodies = [body(f"b{index}", positions[index], velocities[index], radius=float(rng.uniform(0.5, 300))) for index in range(25)]
+    config = SafetyConfig()
+
+    snapshot = safety_snapshot(bodies, config)
+    expected = [item for item in assess_all_pairs(bodies, config) if item.is_unsafe or item.is_collision]
+
+    flagged = snapshot.flagged_assessments()
+    assert [item.pair for item in flagged] == [item.pair for item in expected]
+    for actual, reference in zip(flagged, expected):
+        assert (actual.is_unsafe, actual.is_collision) == (reference.is_unsafe, reference.is_collision)
+        assert actual.predicted_miss_distance_meters == pytest.approx(reference.predicted_miss_distance_meters, abs=1e-9)
+    assert snapshot.recent_close_approaches(120).keys() == close_approaches_since(bodies, 120, config).keys()
+    assert snapshot.minimum_separation() == pytest.approx(min(item.current_separation_meters for item in assess_all_pairs(bodies, config)))

@@ -15,14 +15,10 @@ import numpy as np
 
 from orbitzoo.env import OrbitZoo
 from orbitzoo.thesis.environments.diagnostics import EpisodeDiagnostics
-from orbitzoo.thesis.environments.observations import LocalObservationEncoder
+from orbitzoo.thesis.environments.observations import LocalObservationEncoder, fuel_fraction
 from orbitzoo.thesis.environments.rewards import RewardConfig, calculate_rewards
-from orbitzoo.thesis.environments.safety import (
-    PairSafetyAssessment,
-    SafetyConfig,
-    assess_all_pairs,
-    close_approaches_since,
-)
+from orbitzoo.thesis.environments.safety import PairSafetyAssessment, SafetyConfig, SafetySnapshot, safety_snapshot
+from orbitzoo.thesis.environments.vectorized_observations import CatalogState, encode_local_observations
 from orbitzoo.thesis.maneuvers.actions import ManeuverAction
 from orbitzoo.thesis.maneuvers.contract import (
     ManeuverCommand,
@@ -76,7 +72,11 @@ class CollisionAvoidanceEnv(OrbitZoo):
         self.step_index = 0
         self.is_terminated = True
         self.diagnostics = EpisodeDiagnostics([])
-        super().__init__(**orbitzoo_kwargs)
+        without_covariance = {
+            group: [{**body, "covariance": False} for body in orbitzoo_kwargs.get(group, [])]
+            for group in ("spacecrafts", "drifters")
+        }
+        super().__init__(**{**orbitzoo_kwargs, **without_covariance})
 
     @property
     def num_agents(self) -> int:
@@ -96,27 +96,32 @@ class CollisionAvoidanceEnv(OrbitZoo):
     def _spacecraft_by_name(self) -> dict[str, Any]:
         return {spacecraft.name: spacecraft for spacecraft in self.dynamics.spacecrafts}
 
-    def _state(
-        self, assessments: Sequence[PairSafetyAssessment] | None = None
-    ) -> tuple[np.ndarray, np.ndarray]:
-        state = self.observation_encoder.encode(
-            self._moving_bodies(), self.agent_names, assessments
+    def _state(self) -> tuple[np.ndarray, np.ndarray]:
+        bodies = self._moving_bodies()
+        agents = set(self.agent_names)
+        index = {body.name: position for position, body in enumerate(bodies)}
+        catalog = CatalogState(
+            positions=np.asarray([body.position for body in bodies], dtype=float),
+            velocities=np.asarray([body.velocity for body in bodies], dtype=float),
+            radii=np.asarray([body.radius for body in bodies], dtype=float),
+            is_agent=np.asarray([body.name in agents for body in bodies]),
+            fuel_fractions=np.asarray([fuel_fraction(body, agents) for body in bodies]),
         )
-        return state.local_observations, state.global_state
+        global_state = self.observation_encoder.global_state(bodies, self.agent_names)
+        local = encode_local_observations(
+            catalog,
+            np.asarray([index[name] for name in self.agent_names], dtype=np.intp),
+            self.observation_encoder.neighborhood_size,
+            self.safety_config,
+        )
+        return local, global_state
 
-    def _assessments(self) -> list[PairSafetyAssessment]:
-        return assess_all_pairs(self._moving_bodies(), self.safety_config)
+    def _snapshot(self) -> SafetySnapshot:
+        return safety_snapshot(self._moving_bodies(), self.safety_config)
 
     def unsafe_assessments(self) -> list[PairSafetyAssessment]:
         """Assessments of body pairs currently predicted to pass within the safe separation."""
-        return [assessment for assessment in self._assessments() if assessment.is_unsafe]
-
-    @staticmethod
-    def _minimum_separation(assessments: list[PairSafetyAssessment]) -> float:
-        return min(
-            (assessment.current_separation_meters for assessment in assessments),
-            default=float("inf"),
-        )
+        return [assessment for assessment in self._last_snapshot.flagged_assessments() if assessment.is_unsafe]
 
     def _validate_spacecraft_contract(self) -> None:
         if not self.agent_names:
@@ -141,9 +146,9 @@ class CollisionAvoidanceEnv(OrbitZoo):
         self.step_index = 0
         self.is_terminated = False
         self.diagnostics = EpisodeDiagnostics(self.agent_names)
-        assessments = self._assessments()
-        self.diagnostics.record_minimum_separation(self._minimum_separation(assessments))
-        return self._state(assessments)
+        self._last_snapshot = self._snapshot()
+        self.diagnostics.record_minimum_separation(self._last_snapshot.minimum_separation())
+        return self._state()
 
     def _commands_for_actions(
         self, action_ids: np.ndarray
@@ -179,7 +184,7 @@ class CollisionAvoidanceEnv(OrbitZoo):
         if np.any(actions < int(ManeuverAction.NO_OP)) or np.any(actions > int(ManeuverAction.CROSS_TRACK_NEGATIVE)):
             raise ValueError("action IDs must be integers in [0, 6]")
 
-        assessments_before = self._assessments()
+        assessments_before = self._last_snapshot.flagged_assessments()
         commands, rejected_agents = self._commands_for_actions(actions)
         thrusts, durations = orbitzoo_action_inputs(commands)
         spacecraft_before = self._spacecraft_by_name()
@@ -199,10 +204,10 @@ class CollisionAvoidanceEnv(OrbitZoo):
             )
             for name in self.agent_names
         }
-        assessments_after = self._assessments()
-        close_approaches = close_approaches_since(
-            self._moving_bodies(), self.decision_interval_seconds, self.safety_config
-        )
+        snapshot = self._snapshot()
+        self._last_snapshot = snapshot
+        assessments_after = snapshot.flagged_assessments()
+        close_approaches = snapshot.recent_close_approaches(self.decision_interval_seconds)
         rewards = calculate_rewards(
             self.agent_names,
             results,
@@ -217,9 +222,9 @@ class CollisionAvoidanceEnv(OrbitZoo):
         collision_pairs = [assessment.pair for assessment in assessments_after if assessment.is_collision]
         self.is_terminated = bool(collision_pairs) or self.step_index >= self.episode_horizon
         self.diagnostics.record_maneuvers(results)
-        self.diagnostics.record_minimum_separation(self._minimum_separation(assessments_after))
+        self.diagnostics.record_minimum_separation(snapshot.minimum_separation())
         self.diagnostics.collision_pairs.extend(collision_pairs)
-        local_observations, global_state = self._state(assessments_after)
+        local_observations, global_state = self._state()
         dones = np.full(self.num_agents, self.is_terminated, dtype=bool)
         info = {
             "step_index": self.step_index,
@@ -233,7 +238,7 @@ class CollisionAvoidanceEnv(OrbitZoo):
                 {"pair": pair, "miss_distance_meters": miss} for pair, miss in close_approaches.items()
             ],
             "minimum_separation_meters": self.diagnostics.minimum_separation_meters,
-            "assessments": [asdict(assessment) for assessment in assessments_after],
+            "flagged_assessments": [asdict(assessment) for assessment in assessments_after],
             "maneuvers": {
                 name: {
                     "action": int(result.command.action),

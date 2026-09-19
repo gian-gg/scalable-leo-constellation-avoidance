@@ -29,7 +29,7 @@ from orbitzoo.thesis.maneuvers.sizing import (
     smallest_passing_delta_v,
 )
 from orbitzoo.thesis.environments.safety import SafetyConfig
-from orbitzoo.thesis.scalability.observations import CatalogState, top_neighbors
+from orbitzoo.thesis.environments.vectorized_observations import CatalogState, top_neighbors
 from orbitzoo.thesis.scalability.simulator import SGP4Trajectory
 
 

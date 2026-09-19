@@ -20,7 +20,7 @@ from orbitzoo.thesis.evaluation.policies import EvaluationPolicy
 from orbitzoo.thesis.maneuvers.actions import ManeuverAction
 from orbitzoo.thesis.maneuvers.contract import STANDARD_GRAVITY_MPS2, ManeuverConfig
 from orbitzoo.thesis.scalability.dynamics import HillOffsets, inertial_states, mean_motions
-from orbitzoo.thesis.scalability.observations import CatalogState, encode_local_observations
+from orbitzoo.thesis.environments.vectorized_observations import CatalogState, encode_local_observations
 from orbitzoo.thesis.scalability.screening import ConjunctionEvent, ConjunctionTracker, close_approaches
 
 ACTION_DIRECTIONS = np.array([action.rsw_unit_vector for action in ManeuverAction], dtype=np.float64)

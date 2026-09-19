@@ -70,6 +70,15 @@ An action that cannot be completed within available fuel or the maximum burn
 duration is changed to no-op and receives the configured infeasible-action
 penalty.
 
+## Performance
+
+Safety screening is vectorized over all body pairs (`safety_snapshot`), and local
+observations use `encode_local_observations`, which produces the same rows as
+`LocalObservationEncoder` (checked by the test suite). Only unsafe or colliding
+pairs become `PairSafetyAssessment` objects; `info["flagged_assessments"]` lists
+them. Every body is created with OrbitZoo's `covariance: False`, which skips
+covariance propagation the thesis never uses and roughly halves step time.
+
 ## Safety and termination
 
 Each step checks every pair of moving bodies. A physical collision occurs when

@@ -19,7 +19,7 @@ from orbitzoo.thesis.evaluation.policies import (
 from orbitzoo.thesis.maneuvers.contract import ManeuverConfig
 from orbitzoo.thesis.scalability.config import ScalabilityConfig
 from orbitzoo.thesis.scalability.dynamics import inertial_states, mean_motions, propagate_hill_states
-from orbitzoo.thesis.scalability.observations import CatalogState, encode_local_observations, rsw_bases, top_neighbors
+from orbitzoo.thesis.environments.vectorized_observations import CatalogState, encode_local_observations, rsw_bases, top_neighbors
 from orbitzoo.thesis.scalability.runner import build_scenarios, leo_objects, run_scalability
 from orbitzoo.thesis.scalability.screening import (
     ConjunctionEvent,

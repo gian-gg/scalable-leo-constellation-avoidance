@@ -31,7 +31,7 @@ class ObservationState:
     global_state: np.ndarray
 
 
-def _fuel_fraction(body: Any, maneuverable_names: set[str]) -> float:
+def fuel_fraction(body: Any, maneuverable_names: set[str]) -> float:
     if body.name not in maneuverable_names:
         return 0.0
     initial_fuel = float(getattr(body, "initial_fuel_mass", 0.0))
@@ -102,7 +102,7 @@ class LocalObservationEncoder:
             (
                 np.asarray(body.position, dtype=np.float32) / POSITION_SCALE_METERS,
                 np.asarray(body.velocity, dtype=np.float32) / VELOCITY_SCALE_MPS,
-                np.asarray([_fuel_fraction(body, maneuverable_names)], dtype=np.float32),
+                np.asarray([fuel_fraction(body, maneuverable_names)], dtype=np.float32),
             )
         )
 
@@ -137,7 +137,7 @@ class LocalObservationEncoder:
                         assessment.combined_radius_meters
                         / self.safety_config.safe_separation_meters,
                         float(neighbor.name in maneuverable_names),
-                        _fuel_fraction(neighbor, maneuverable_names),
+                        fuel_fraction(neighbor, maneuverable_names),
                         1.0,
                     ],
                     dtype=np.float32,
@@ -209,6 +209,15 @@ class LocalObservationEncoder:
                 np.concatenate((self._own_features(observer, maneuverable_names), *blocks))
             )
 
+        return ObservationState(
+            local_observations=np.stack(local_rows).astype(np.float32),
+            global_state=self.global_state(bodies, agent_names),
+        )
+
+    def global_state(self, bodies: Sequence[Any], agent_names: Sequence[str]) -> np.ndarray:
+        """Critic-only state: every moving body, agents first in ``agent_names`` order."""
+        body_by_name = self._validate_bodies(bodies, agent_names)
+        maneuverable_names = set(agent_names)
         ordered_bodies = [body_by_name[name] for name in agent_names]
         ordered_bodies.extend(body for body in bodies if body.name not in maneuverable_names)
         global_blocks = [
@@ -219,7 +228,7 @@ class LocalObservationEncoder:
                     np.asarray(
                         [
                             float(body.radius) / self.safety_config.safe_separation_meters,
-                            _fuel_fraction(body, maneuverable_names),
+                            fuel_fraction(body, maneuverable_names),
                             float(body.name in maneuverable_names),
                         ],
                         dtype=np.float32,
@@ -228,7 +237,4 @@ class LocalObservationEncoder:
             )
             for body in ordered_bodies
         ]
-        return ObservationState(
-            local_observations=np.stack(local_rows).astype(np.float32),
-            global_state=np.concatenate(global_blocks).astype(np.float32),
-        )
+        return np.concatenate(global_blocks).astype(np.float32)

@@ -11,10 +11,10 @@ from typing import Sequence
 
 import numpy as np
 
+from orbitzoo.thesis.environments.vectorized_observations import rsw_bases
 from orbitzoo.thesis.evaluation.policies import clohessy_wiltshire_displacement
 from orbitzoo.thesis.maneuvers.actions import ManeuverAction
 from orbitzoo.thesis.scalability.dynamics import mean_motions
-from orbitzoo.thesis.scalability.observations import rsw_bases
 
 BURN_ACTIONS = tuple(action for action in ManeuverAction if action is not ManeuverAction.NO_OP)
 
