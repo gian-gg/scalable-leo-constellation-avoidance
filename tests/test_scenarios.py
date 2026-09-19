@@ -142,3 +142,25 @@ def test_train_and_test_splits_share_no_satellites_or_shapes(source: GeneratedEp
 
     assert not {item.norad_id for item in train.agents} & {item.norad_id for item in test.agents}
     assert not {shape.event_id for shape in train.shapes} & {shape.event_id for shape in test.shapes}
+
+
+@REAL_DATA
+def test_a_satellite_sgp4_cannot_propagate_is_redrawn(source: GeneratedEpisodeSource, monkeypatch) -> None:
+    from orbitzoo.thesis.calibration.propagation import PropagationError
+    from orbitzoo.thesis.scenarios import generator as generator_module
+
+    original = generator_module.SGP4Trajectory.states
+    calls = {"count": 0}
+
+    def fail_once(self, times):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise PropagationError("decayed")
+        return original(self, times)
+
+    monkeypatch.setattr(generator_module.SGP4Trajectory, "states", fail_once)
+
+    scenario = source.generator.generate(7)
+
+    assert calls["count"] > 1
+    assert len(scenario.orbitzoo_kwargs["spacecrafts"]) == 16

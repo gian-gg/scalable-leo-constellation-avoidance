@@ -13,6 +13,7 @@ from typing import Any
 
 import numpy as np
 
+from orbitzoo.thesis.calibration.propagation import PropagationError
 from orbitzoo.thesis.environments.safety import SafetyConfig, safety_snapshot
 from orbitzoo.thesis.environments.vectorized_observations import rsw_bases
 from orbitzoo.thesis.maneuvers.contract import ManeuverConfig
@@ -188,7 +189,10 @@ class ScenarioGenerator:
         epoch = self.pools.base_epoch_utc + timedelta(seconds=float(rng.uniform(0, config.epoch_window_seconds)))
         plan = plan_situations(rng, self.num_agents, self.extra_objects, config.situation_weights)
         chosen = [self.pools.agents[index] for index in rng.choice(len(self.pools.agents), len(plan), replace=False)]
-        teme = SGP4Trajectory(chosen, epoch).states(np.zeros(1))
+        try:
+            teme = SGP4Trajectory(chosen, epoch).states(np.zeros(1))
+        except PropagationError:
+            return None
         positions, velocities = teme_to_inertial(teme[0][:, 0], teme[1][:, 0], epoch)
 
         spacecrafts: list[dict[str, Any]] = []
@@ -224,7 +228,10 @@ class ScenarioGenerator:
         filler_count = self.extra_objects - len(drifters)
         if filler_count:
             filler = [self.pools.background[i] for i in rng.choice(len(self.pools.background), filler_count, replace=False)]
-            filler_teme = SGP4Trajectory(filler, epoch).states(np.zeros(1))
+            try:
+                filler_teme = SGP4Trajectory(filler, epoch).states(np.zeros(1))
+            except PropagationError:
+                return None
             filler_positions, filler_velocities = teme_to_inertial(filler_teme[0][:, 0], filler_teme[1][:, 0], epoch)
             drifters += [
                 self._drifter(f"background-{item.norad_id}", filler_positions[i], filler_velocities[i], item.radius_meters)
