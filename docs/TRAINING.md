@@ -14,10 +14,24 @@ directory and continues from its latest checkpoint until `training.total_updates
 
 ## Scenario source
 
-`environment.scenario` names an entry in
-`orbitzoo.thesis.environments.scenarios.SCENARIOS`. Only `development` (the
-four-satellite, one-debris fixture) exists today. The number of spacecraft in the
-scenario must equal `environment.num_agents`.
+`environment.scenario` selects where episodes come from:
+
+- `development`: the fixed four-satellite, one-debris fixture, reset with each seed.
+- `generated`: a new scenario per episode from real orbits and real close calls; see
+  [TRAINING_SCENARIOS.md](TRAINING_SCENARIOS.md).
+
+The number of spacecraft must equal `environment.num_agents`.
+
+## Curriculum
+
+Train the stages in order; each copies the previous stage's actor through
+`training.initial_actor_checkpoint`:
+
+```sh
+.venv/bin/oz train --config configs/mappo_stage1.json --output runs/stage1
+.venv/bin/oz train --config configs/mappo_stage2.json --output runs/stage2
+.venv/bin/oz train --config configs/mappo_stage3.json --output runs/stage3
+```
 
 ## Training loop
 
@@ -65,5 +79,7 @@ final update. On resume, metric rows newer than the checkpoint are discarded.
 
 - `configs/mappo_smoke.json`: two tiny updates on the development fixture, for
   checking the pipeline.
+- `configs/mappo_generated_smoke.json`: two tiny updates on generated scenarios.
+- `configs/mappo_stage{1,2,3}.json`: the training curriculum.
 - `configs/mappo_toy.json`: architecture defaults. It is not a thesis experiment
   until the training scenarios and maneuver sizing are fixed.

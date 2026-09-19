@@ -461,6 +461,27 @@ class MAPPO(RLAlgorithm):
         policy.load(checkpoint_path)
         return policy
 
+    def load_actor(self, checkpoint_path: str | Path) -> None:
+        """Copy only the shared actor from a checkpoint, e.g. from a smaller curriculum stage."""
+        checkpoint = torch.load(Path(checkpoint_path), map_location=self.device, weights_only=False)
+        if checkpoint.get("checkpoint_version") != self.CHECKPOINT_VERSION:
+            raise ValueError("unsupported MAPPO checkpoint version")
+        saved = {
+            "local_observation_dim": checkpoint.get("local_observation_dim"),
+            "num_actions": checkpoint.get("num_actions"),
+            "actor_hidden_dims": tuple(checkpoint.get("actor_hidden_dims", ())),
+        }
+        expected = {
+            "local_observation_dim": self.local_observation_dim,
+            "num_actions": self.num_actions,
+            "actor_hidden_dims": self.actor_hidden_dims,
+        }
+        for name, value in expected.items():
+            if saved[name] != value:
+                raise ValueError(f"checkpoint {name} does not match this MAPPO actor")
+        self.actor.load_state_dict(checkpoint["actor_state_dict"])
+        self.actor.to(self.device).eval()
+
     def load(self, checkpoint_path: str | Path) -> None:
         """Restore a checkpoint into a MAPPO instance with matching dimensions."""
         checkpoint = torch.load(Path(checkpoint_path), map_location=self.device, weights_only=False)

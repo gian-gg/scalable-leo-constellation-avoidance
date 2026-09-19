@@ -16,7 +16,7 @@ from orbitzoo.thesis.environments.observations import (
     VELOCITY_SCALE_MPS,
 )
 from orbitzoo.thesis.environments.safety import SafetyConfig
-from orbitzoo.thesis.environments.scenarios import build_environment
+from orbitzoo.thesis.environments.scenarios import FixedEpisodeSource, build_environment
 from orbitzoo.thesis.evaluation.evaluator import (
     build_policy,
     evaluate,
@@ -128,9 +128,10 @@ def test_rule_widens_the_development_conjunction_compared_with_noop() -> None:
     config = ExperimentConfig.load(SMOKE_CONFIG)
     config = dataclasses.replace(config, maneuver=LARGE_MANEUVER)
     env = build_environment(config)
+    source = FixedEpisodeSource(env)
 
-    [coasting] = evaluate_policy(build_policy("noop", config, env.local_observation_dim), env, [0])
-    [avoiding] = evaluate_policy(build_policy("rule", config, env.local_observation_dim), env, [0])
+    [coasting] = evaluate_policy(build_policy("noop", config, env.local_observation_dim), source, [0])
+    [avoiding] = evaluate_policy(build_policy("rule", config, env.local_observation_dim), source, [0])
 
     assert coasting.mean_delta_v_per_agent_mps == 0.0
     assert avoiding.mean_delta_v_per_agent_mps > 0.0

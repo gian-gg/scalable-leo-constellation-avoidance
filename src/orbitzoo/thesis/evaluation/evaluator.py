@@ -6,6 +6,7 @@ See docs/EVALUATION.md.
 from __future__ import annotations
 
 import csv
+import dataclasses
 from dataclasses import dataclass
 import json
 from pathlib import Path
@@ -15,9 +16,8 @@ import numpy as np
 
 from orbitzoo.rl_algorithms.mappo import MAPPO
 from orbitzoo.thesis.config import ExperimentConfig
-from orbitzoo.thesis.environments.collision_avoidance import CollisionAvoidanceEnv
 from orbitzoo.thesis.environments.episodes import EpisodeSummary, play_episode
-from orbitzoo.thesis.environments.scenarios import build_environment
+from orbitzoo.thesis.environments.scenarios import EpisodeSource, build_episode_source
 from orbitzoo.thesis.evaluation.coordination import COORDINATION_COLUMNS, CoordinationCounts
 from orbitzoo.thesis.evaluation.policies import (
     ClohessyWiltshireAvoidancePolicy,
@@ -112,11 +112,16 @@ def summarize(policy_name: str, episodes: Sequence[EpisodeSummary]) -> PolicySum
     )
 
 
-def evaluate_policy(
-    policy: EvaluationPolicy, env: CollisionAvoidanceEnv, seeds: Sequence[int]
-) -> list[EpisodeSummary]:
+def evaluate_policy(policy: EvaluationPolicy, source: EpisodeSource, seeds: Sequence[int]) -> list[EpisodeSummary]:
     """Play every seed with actions chosen from local observations alone."""
-    return [play_episode(env, seed, lambda local, _: policy.choose(local)) for seed in seeds]
+    return [play_episode(source.environment(seed), seed, lambda local, _: policy.choose(local)) for seed in seeds]
+
+
+def held_out(config: ExperimentConfig) -> ExperimentConfig:
+    """The same config, drawing generated scenarios from the held-out test split."""
+    return dataclasses.replace(
+        config, scenario_generator=dataclasses.replace(config.scenario_generator, split="test")
+    )
 
 
 def _write_csv(path: Path, fieldnames: Sequence[str], rows: Sequence[dict]) -> None:
@@ -138,8 +143,9 @@ def evaluate(
     if not policy_specs:
         raise ValueError("at least one policy is required")
     seeds = evaluation_seeds(config, episodes)
-    env = build_environment(config)
-    policies = [build_policy(spec, config, env.local_observation_dim) for spec in policy_specs]
+    source = build_episode_source(held_out(config))
+    width = source.environment(seeds[0]).local_observation_dim
+    policies = [build_policy(spec, config, width) for spec in policy_specs]
     names = [policy.name for policy in policies]
     if len(set(names)) != len(names):
         raise ValueError(f"policy names must be unique: {names}")
@@ -159,7 +165,7 @@ def evaluate(
     episode_rows: list[dict] = []
     summaries: list[PolicySummary] = []
     for policy in policies:
-        results = evaluate_policy(policy, env, seeds)
+        results = evaluate_policy(policy, source, seeds)
         episode_rows.extend(_episode_row(policy.name, result) for result in results)
         summaries.append(summarize(policy.name, results))
         if progress:

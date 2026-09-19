@@ -1,0 +1,95 @@
+{
+  "environment": {
+    "decision_interval_seconds": 120.0,
+    "episode_horizon": 6,
+    "neighborhood_size": 1,
+    "num_agents": 4,
+    "scenario": "generated"
+  },
+  "maneuver": {
+    "commanded_delta_v_mps": 0.5,
+    "maximum_burn_duration_seconds": 60.0,
+    "maximum_thrust_newtons": 7.0,
+    "specific_impulse_seconds": 300.0
+  },
+  "policy": {
+    "algorithm": "mappo",
+    "global_state_dim": null,
+    "local_observation_dim": null,
+    "num_actions": 7
+  },
+  "rewards": {
+    "close_approach_penalty": -10.0,
+    "collision_penalty": -100.0,
+    "delta_v_penalty_per_mps": 1.0,
+    "infeasible_maneuver_penalty": -2.0,
+    "shaping_discount": 0.99,
+    "shaping_weight": 10.0
+  },
+  "safety": {
+    "safe_separation_meters": 1000.0,
+    "screening_horizon_seconds": 1800.0
+  },
+  "scenario_generator": {
+    "dry_mass_kg": 250.0,
+    "epoch_window_seconds": 259200.0,
+    "extra_objects": null,
+    "harmless_miss_meters": [
+      2000.0,
+      10000.0
+    ],
+    "held_out_fraction": 0.2,
+    "initial_fuel_mass_kg": 50.0,
+    "maximum_altitude_meters": 2000000.0,
+    "maximum_attempts": 20,
+    "maximum_tle_age_days": 14.0,
+    "meeting_time_seconds": [
+      480.0,
+      990.0
+    ],
+    "metadata_path": "data/full/objects.csv",
+    "minimum_altitude_meters": 200000.0,
+    "minimum_perigee_altitude_meters": 150000.0,
+    "minimum_unplanned_separation_meters": 10000.0,
+    "second_threat_delay_seconds": [
+      60.0,
+      240.0
+    ],
+    "situation_weights": {
+      "debris": 0.3,
+      "double_threat": 0.15,
+      "harmless": 0.15,
+      "quiet": 0.15,
+      "satellite_pair": 0.25
+    },
+    "sizing_config": "configs/maneuver_sizing.json",
+    "split": "train",
+    "tle_path": "data/full/catalog.tle"
+  },
+  "schema_version": 1,
+  "seed": 42,
+  "training": {
+    "actor_hidden_dims": [
+      32
+    ],
+    "actor_learning_rate": 0.0003,
+    "checkpoint_interval": 1,
+    "critic_hidden_dims": [
+      32
+    ],
+    "critic_learning_rate": 0.001,
+    "device": "cpu",
+    "entropy_coefficient": 0.01,
+    "gae_lambda": 0.95,
+    "gamma": 0.99,
+    "initial_actor_checkpoint": null,
+    "max_gradient_norm": 0.5,
+    "minibatch_size": 64,
+    "ppo_clip": 0.2,
+    "rollout_steps": 12,
+    "total_updates": 2,
+    "update_epochs": 2,
+    "value_clip": 0.2,
+    "value_coefficient": 0.5
+  }
+}

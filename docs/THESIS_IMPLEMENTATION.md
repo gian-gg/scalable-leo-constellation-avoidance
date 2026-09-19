@@ -81,6 +81,8 @@ against the full TLE catalog, sweeping catalog size and agent count, and reports
 conjunctions, maneuver-induced secondary conjunctions, delta-v, and per-stage cost.
 [Maneuver sizing](MANEUVER_SIZING.md) (`oz size-maneuvers`) derives the per-action
 delta-v and minimum thrust from the reference conjunctions.
+[Training scenarios](TRAINING_SCENARIOS.md) are generated per episode from real
+orbits and real close-call geometry, in a 16 → 64 → 150 agent curriculum.
 
 The actor now receives fixed-width, threat-ranked local observations containing
 `k` relative-neighbour blocks with explicit padding masks. The critic receives

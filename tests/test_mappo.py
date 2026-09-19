@@ -136,3 +136,22 @@ def test_values_match_the_critic_for_every_agent(algorithm):
     _, _, act_values = algorithm.act(local_observations, global_state)
 
     torch.testing.assert_close(algorithm.values(local_observations, global_state), act_values)
+
+
+def test_load_actor_copies_only_the_actor(algorithm, tmp_path):
+    algorithm.save(tmp_path / "small.pt")
+    larger = MAPPO(
+        local_observation_dim=3, global_state_dim=11, num_actions=7,
+        actor_hidden_dims=(16,), critic_hidden_dims=(16,),
+    )
+    critic_before = [parameter.clone() for parameter in larger.critic.parameters()]
+
+    larger.load_actor(tmp_path / "small.pt")
+
+    for loaded, original in zip(larger.actor.parameters(), algorithm.actor.parameters()):
+        torch.testing.assert_close(loaded, original)
+    for after, before in zip(larger.critic.parameters(), critic_before):
+        torch.testing.assert_close(after, before)
+    mismatched = MAPPO(local_observation_dim=4, global_state_dim=5, actor_hidden_dims=(16,), critic_hidden_dims=(16,))
+    with pytest.raises(ValueError):
+        mismatched.load_actor(tmp_path / "small.pt")

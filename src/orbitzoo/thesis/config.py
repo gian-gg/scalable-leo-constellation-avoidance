@@ -10,6 +10,7 @@ from typing import Any
 from orbitzoo.thesis.environments.rewards import REMOVED_REWARD_FIELDS, RewardConfig
 from orbitzoo.thesis.environments.safety import SafetyConfig
 from orbitzoo.thesis.maneuvers.contract import ManeuverConfig
+from orbitzoo.thesis.scenarios.config import ScenarioGeneratorConfig
 
 
 def default_maneuver_config() -> ManeuverConfig:
@@ -91,6 +92,7 @@ class TrainingConfig:
     max_gradient_norm: float = 0.5
     checkpoint_interval: int = 10
     device: str = "cpu"
+    initial_actor_checkpoint: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "actor_hidden_dims", tuple(self.actor_hidden_dims))
@@ -131,6 +133,7 @@ class ExperimentConfig:
     maneuver: ManeuverConfig = field(default_factory=default_maneuver_config)
     safety: SafetyConfig = field(default_factory=SafetyConfig)
     rewards: RewardConfig = field(default_factory=RewardConfig)
+    scenario_generator: ScenarioGeneratorConfig = field(default_factory=ScenarioGeneratorConfig)
     schema_version: int = 1
 
     def validate(self) -> None:
@@ -142,6 +145,7 @@ class ExperimentConfig:
         self.maneuver.validate()
         self.safety.validate()
         self.rewards.validate()
+        self.scenario_generator.validate()
         if self.rewards.shaping_discount != self.training.gamma:
             raise ValueError("rewards.shaping_discount must equal training.gamma for policy-invariant shaping")
 
@@ -173,6 +177,7 @@ class ExperimentConfig:
             maneuver=ManeuverConfig(**raw["maneuver"]) if "maneuver" in raw else default_maneuver_config(),
             safety=SafetyConfig(**raw["safety"]) if "safety" in raw else SafetyConfig(),
             rewards=RewardConfig(**raw["rewards"]) if "rewards" in raw else RewardConfig(),
+            scenario_generator=ScenarioGeneratorConfig(**raw.get("scenario_generator", {})),
         )
         config.validate()
         return config

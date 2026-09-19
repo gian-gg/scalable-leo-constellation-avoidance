@@ -20,7 +20,7 @@ from orbitzoo.rl_algorithms.mappo import MAPPO
 from orbitzoo.thesis.config import ExperimentConfig
 from orbitzoo.thesis.environments.collision_avoidance import CollisionAvoidanceEnv
 from orbitzoo.thesis.environments.episodes import EpisodeSummary, StepOutputs, play_episode
-from orbitzoo.thesis.environments.scenarios import build_environment
+from orbitzoo.thesis.environments.scenarios import build_episode_source
 from orbitzoo.thesis.runtime import select_device
 
 METRICS_FILENAME = "metrics.csv"
@@ -186,9 +186,14 @@ def train(
     training = config.training
     np.random.seed(config.seed)
     torch.manual_seed(config.seed)
-    env = build_environment(config)
-    policy = _build_policy(config, env)
-    episode_index = _restore_checkpoint(run_directory, policy) if resume else 0
+    source = build_episode_source(config)
+    policy = _build_policy(config, source.environment(config.seed))
+    if resume:
+        episode_index = _restore_checkpoint(run_directory, policy)
+    else:
+        episode_index = 0
+        if training.initial_actor_checkpoint:
+            policy.load_actor(Path(training.initial_actor_checkpoint))
 
     metrics_path = run_directory / METRICS_FILENAME
     rows: list[dict[str, float | str]] = list(_read_metrics(metrics_path, policy.update_count))
@@ -198,12 +203,13 @@ def train(
             started = time.perf_counter()
             episodes: list[EpisodeSummary] = []
             while len(policy.rollout) < training.rollout_steps:
-                episodes.append(run_episode(policy, env, config.seed + episode_index))
+                seed = config.seed + episode_index
+                episodes.append(run_episode(policy, source.environment(seed), seed))
                 episode_index += 1
             losses = policy.update(
                 policy.rollout.local_observations[-1],
                 policy.rollout.global_states[-1],
-                np.ones(env.num_agents, dtype=bool),
+                np.ones(config.environment.num_agents, dtype=bool),
             )
             metrics = _update_metrics(
                 policy.update_count, policy, episodes, losses, time.perf_counter() - started

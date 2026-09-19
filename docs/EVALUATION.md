@@ -36,8 +36,8 @@ learning adds anything beyond a physics-aware single-threat heuristic.
 ## Episodes
 
 Evaluation seeds start at `seed + 1,000,000`, disjoint from the training seeds
-(`seed + episode index`). All policies play the same seeds in the same
-environment.
+(`seed + episode index`). All policies play the same seeds. Generated scenarios
+are drawn from the held-out test split of satellites and close-call shapes.
 
 ## Output
 
