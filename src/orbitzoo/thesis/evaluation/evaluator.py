@@ -41,6 +41,9 @@ class PolicySummary:
     policy: str
     episodes: int
     collision_rate: float
+    mean_close_approaches: float
+    closest_approach_m: float | None
+    mean_close_approach_shortfall: float
     mean_return: float
     mean_unsafe_agent_steps: float
     mean_final_unsafe_agents: float
@@ -104,6 +107,11 @@ def summarize(policy_name: str, episodes: Sequence[EpisodeSummary]) -> PolicySum
         policy=policy_name,
         episodes=len(episodes),
         collision_rate=mean("ended_in_collision"),
+        mean_close_approaches=mean("close_approaches"),
+        closest_approach_m=min(
+            (episode.closest_approach_m for episode in episodes if episode.closest_approach_m is not None), default=None
+        ),
+        mean_close_approach_shortfall=mean("mean_close_approach_shortfall"),
         mean_return=mean("mean_agent_return"),
         mean_unsafe_agent_steps=mean("unsafe_agent_steps"),
         mean_final_unsafe_agents=mean("final_unsafe_agents"),
@@ -181,7 +189,7 @@ def evaluate(
             summary = summaries[-1]
             progress(
                 f"{policy.name}: collisions {summary.collision_rate:.2%}, "
-                f"unsafe agent-steps {summary.mean_unsafe_agent_steps:.2f}, "
+                f"close approaches {summary.mean_close_approaches:.2f}, "
                 f"delta-v {summary.mean_delta_v_per_agent_mps:.4f} m/s"
             )
 

@@ -9,6 +9,7 @@ import numpy as np
 import torch
 
 from orbitzoo.thesis.environments.collision_avoidance import CollisionAvoidanceEnv
+from orbitzoo.thesis.environments.rewards import shortfall
 from orbitzoo.thesis.evaluation.coordination import CoordinationCounts
 from orbitzoo.thesis.evaluation.drift import return_delta_v
 
@@ -31,6 +32,9 @@ class EpisodeSummary:
     mean_delta_v_per_agent_mps: float
     minimum_separation_meters: float
     coordination: CoordinationCounts
+    close_approaches: int = 0
+    closest_approach_m: float | None = None
+    mean_close_approach_shortfall: float = 0.0
     mean_slot_offset_m: float | None = None
     max_slot_offset_m: float | None = None
     mean_return_delta_v_mps: float | None = None
@@ -72,6 +76,7 @@ def play_episode(
     unsafe_agent_steps = rejected_actions = 0
     unsafe_agent_pairs = _unsafe_agent_pairs([asdict(item) for item in env.unsafe_assessments()], agent_names)
     pair_maneuvers: dict[frozenset[str], set[str]] = {}
+    realized_misses: list[float] = []
     last_unsafe_tca: dict[frozenset[str], float] = dict(unsafe_agent_pairs)
     while True:
         actions = np.asarray(choose_actions(local, global_state), dtype=np.int64)
@@ -82,6 +87,9 @@ def play_episode(
         total_reward += rewards
         unsafe_agent_steps += len(_unsafe_agents(info, agent_names))
         rejected_actions += len(info["rejected_agents"])
+        realized_misses += [
+            item["miss_distance_meters"] for item in info["close_approaches"] if agent_names & set(item["pair"])
+        ]
         burned = {name for name, maneuver in info["maneuvers"].items() if maneuver["action"] != 0}
         for pair in unsafe_agent_pairs:
             pair_maneuvers.setdefault(pair, set()).update(burned & pair)
@@ -116,5 +124,12 @@ def play_episode(
         mean_delta_v_per_agent_mps=float(np.mean(list(delta_v.values()))),
         minimum_separation_meters=env.diagnostics.minimum_separation_meters,
         coordination=coordination,
+        close_approaches=len(realized_misses),
+        closest_approach_m=min(realized_misses, default=None),
+        mean_close_approach_shortfall=float(
+            np.mean([shortfall(miss, env.safety_config.safe_separation_meters) for miss in realized_misses])
+        )
+        if realized_misses
+        else 0.0,
         **drift,
     )

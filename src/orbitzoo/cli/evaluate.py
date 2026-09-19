@@ -25,13 +25,16 @@ def evaluate(args: argparse.Namespace) -> None:
         raise SystemExit(f"oz: evaluation failed: {error}") from error
 
     print(f"Artifacts: {Path(args.output).expanduser()}")
-    print(f"{'policy':<16}{'collisions':>12}{'unsafe steps':>14}{'delta-v m/s':>14}{'min sep m':>12}")
+    print(
+        f"{'policy':<16}{'collisions':>11}{'close calls':>13}{'closest m':>11}"
+        f"{'shortfall':>11}{'delta-v m/s':>13}{'drift m':>10}"
+    )
     for summary in summaries:
+        closest = f"{summary.closest_approach_m:.1f}" if summary.closest_approach_m is not None else "-"
         print(
-            f"{summary.policy:<16}{summary.collision_rate:>12.2%}"
-            f"{summary.mean_unsafe_agent_steps:>14.2f}"
-            f"{summary.mean_delta_v_per_agent_mps:>14.4f}"
-            f"{summary.minimum_separation_meters:>12.1f}"
+            f"{summary.policy:<16}{summary.collision_rate:>11.2%}{summary.mean_close_approaches:>13.2f}"
+            f"{closest:>11}{summary.mean_close_approach_shortfall:>11.3f}"
+            f"{summary.mean_delta_v_per_agent_mps:>13.4f}{summary.mean_slot_offset_m:>10.1f}"
         )
 
 
