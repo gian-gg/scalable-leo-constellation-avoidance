@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from orbitzoo.thesis.environments.rewards import RewardConfig
+from orbitzoo.thesis.environments.rewards import REMOVED_REWARD_FIELDS, RewardConfig
 from orbitzoo.thesis.environments.safety import SafetyConfig
 from orbitzoo.thesis.maneuvers.contract import ManeuverConfig
 
@@ -142,6 +142,8 @@ class ExperimentConfig:
         self.maneuver.validate()
         self.safety.validate()
         self.rewards.validate()
+        if self.rewards.shaping_discount != self.training.gamma:
+            raise ValueError("rewards.shaping_discount must equal training.gamma for policy-invariant shaping")
 
     def to_dict(self) -> dict[str, Any]:
         self.validate()
@@ -157,6 +159,11 @@ class ExperimentConfig:
     def load(cls, path: str | Path) -> "ExperimentConfig":
         """Load a configuration written by :meth:`save`."""
         raw = json.loads(Path(path).read_text())
+        removed = sorted(set(raw.get("rewards", {})) & set(REMOVED_REWARD_FIELDS))
+        if removed:
+            raise ValueError(
+                f"{path} uses removed reward fields {removed}; see docs/COLLISION_AVOIDANCE_ENVIRONMENT.md"
+            )
         config = cls(
             seed=raw["seed"],
             schema_version=raw.get("schema_version", 1),

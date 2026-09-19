@@ -77,6 +77,31 @@ def assess_all_pairs(bodies: Iterable[KinematicBody], config: SafetyConfig) -> l
     return [assess_pair(first, second, config) for first, second in combinations(bodies, 2)]
 
 
+def recent_closest_approach(first: KinematicBody, second: KinematicBody, lookback_seconds: float) -> float | None:
+    """Miss distance of a closest approach strictly within the last ``lookback_seconds``, from linear motion."""
+    relative_position = np.asarray(second.position, dtype=float) - np.asarray(first.position, dtype=float)
+    relative_velocity = np.asarray(second.velocity, dtype=float) - np.asarray(first.velocity, dtype=float)
+    velocity_squared = float(np.dot(relative_velocity, relative_velocity))
+    if velocity_squared <= 1e-12:
+        return None
+    offset = -float(np.dot(relative_position, relative_velocity)) / velocity_squared
+    if not -lookback_seconds < offset < 0:
+        return None
+    return float(np.linalg.norm(relative_position + relative_velocity * offset))
+
+
+def close_approaches_since(
+    bodies: Iterable[KinematicBody], lookback_seconds: float, config: SafetyConfig
+) -> dict[tuple[str, str], float]:
+    """Pairs whose closest approach within the last ``lookback_seconds`` fell inside the safe separation."""
+    approaches = {}
+    for first, second in combinations(bodies, 2):
+        miss = recent_closest_approach(first, second, lookback_seconds)
+        if miss is not None and miss < config.safe_separation_meters:
+            approaches[(first.name, second.name)] = miss
+    return approaches
+
+
 def involved_agents(assessments: Iterable[PairSafetyAssessment], predicate: str) -> set[str]:
     """Return body names involved in assessments whose boolean field is true."""
     return {

@@ -21,6 +21,7 @@ from orbitzoo.thesis.environments.safety import (
     PairSafetyAssessment,
     SafetyConfig,
     assess_all_pairs,
+    close_approaches_since,
 )
 from orbitzoo.thesis.maneuvers.actions import ManeuverAction
 from orbitzoo.thesis.maneuvers.contract import (
@@ -199,12 +200,16 @@ class CollisionAvoidanceEnv(OrbitZoo):
             for name in self.agent_names
         }
         assessments_after = self._assessments()
+        close_approaches = close_approaches_since(
+            self._moving_bodies(), self.decision_interval_seconds, self.safety_config
+        )
         rewards = calculate_rewards(
             self.agent_names,
-            commands,
             results,
             assessments_before,
             assessments_after,
+            close_approaches,
+            self.safety_config.safe_separation_meters,
             self.reward_config,
             rejected_agents,
         )
@@ -224,6 +229,9 @@ class CollisionAvoidanceEnv(OrbitZoo):
             "rejected_agents": sorted(rejected_agents),
             "collision_pairs": collision_pairs,
             "unsafe_pairs": [assessment.pair for assessment in assessments_after if assessment.is_unsafe],
+            "close_approaches": [
+                {"pair": pair, "miss_distance_meters": miss} for pair, miss in close_approaches.items()
+            ],
             "minimum_separation_meters": self.diagnostics.minimum_separation_meters,
             "assessments": [asdict(assessment) for assessment in assessments_after],
             "maneuvers": {

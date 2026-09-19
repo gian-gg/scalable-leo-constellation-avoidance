@@ -88,15 +88,38 @@ returned for every policy satellite because they are one cooperative team.
 
 ## Rewards and diagnostics
 
-Safety dominates maneuver economy: collision, then unresolved unsafe conjunction,
-then actual delta-v cost. Resolving a previously unsafe conjunction earns a
-bounded positive reward. The initial values are versioned in the experiment
-configuration as provisional development weights; they require reward-ablation
-and sensitivity experiments before thesis results are reported.
+Each satellite receives an individual reward every decision step:
 
-`info` records safety assessments, maneuver accounting, rejected actions, and
-the termination reason. `env.diagnostics` accumulates per-satellite delta-v and
-fuel use, minimum separation, and collision pairs over the episode.
+| Term | Value |
+| --- | --- |
+| Fuel | `-delta_v_penalty_per_mps` × actual delta-v |
+| Rejected action | `infeasible_maneuver_penalty` |
+| Close approach | `close_approach_penalty` × shortfall, for each encounter whose closest approach happened during the step |
+| Collision | `collision_penalty` |
+| Shaping | `shaping_weight` × (`shaping_discount` × Φ(next) − Φ(current)) |
+
+Shortfall is `max(0, 1 − miss / safe_separation)`: zero at or beyond the safe
+separation, one at contact. A close approach during the step is found by tracing
+each pair's linear relative motion back over the step from its post-step state.
+
+The potential Φ is minus the shortfall of the satellite's worst still-approaching
+predicted miss (zero after a collision). The shaping term rewards each step that
+widens the predicted miss and penalises each step that narrows it, so progress is
+visible long before the encounter. Because it is potential-based and
+`shaping_discount` must equal the training discount, it does not change which
+policy is optimal and cannot be farmed by oscillating. Its episode total depends
+only on the start state, so absolute returns include a constant offset: compare
+policies on the same seeds.
+
+Default weights are sized to the 0.5 m/s maneuver: one burn costs 0.5, a 500 m
+close approach costs 5, and a collision costs 100, so safety dominates fuel and
+collisions dominate near misses. The weights still require sensitivity analysis
+before thesis results are reported.
+
+`info` records safety assessments, realized close approaches, maneuver accounting,
+rejected actions, and the termination reason. `env.diagnostics` accumulates
+per-satellite delta-v and fuel use, minimum separation, and collision pairs over
+the episode.
 
 ## Development fixture
 
@@ -119,8 +142,10 @@ The test suite runs the environment end to end on Orekit and checks:
 - equal seeds and actions give bit-identical episodes;
 - infeasible actions coast, horizon and collision end the episode for every agent,
   and invalid action arrays are rejected;
-- every reward outcome (coast, unnecessary burn, unresolved, resolved, collision,
-  rejected action) and every screening boundary case.
+- every reward term (fuel, realized close approach, collision, rejected action,
+  and shaping, including that shaping cancels over a cycle) and every screening
+  boundary case;
+- a passing conjunction is reported with its realized miss distance.
 
 See `tests/test_collision_avoidance_env.py`, `tests/test_rewards.py`, and
 `tests/test_safety.py`.

@@ -2,12 +2,13 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from orbitzoo.thesis.environments.rewards import RewardConfig, calculate_rewards
-from orbitzoo.thesis.environments.safety import SafetyConfig, assess_all_pairs, assess_pair, involved_agents
-from orbitzoo.thesis.maneuvers.contract import (
-    ManeuverConfig,
-    build_maneuver_command,
-    measure_maneuver_result,
+from orbitzoo.thesis.environments.safety import (
+    SafetyConfig,
+    assess_all_pairs,
+    assess_pair,
+    close_approaches_since,
+    involved_agents,
+    recent_closest_approach,
 )
 
 
@@ -28,19 +29,17 @@ def test_linear_screen_detects_future_unsafe_conjunction() -> None:
     assert not assessment.is_collision
 
 
-def test_collision_reward_dominates_maneuver_cost() -> None:
-    config = ManeuverConfig(0.01, 0.1, 300, 60)
-    command = build_maneuver_command(0, 250, config, available_propellant_kg=50)
-    result = measure_maneuver_result(command, 250, 250, 300)
-    collision = assess_pair(
-        body("satellite", [0, 0, 0], [0, 0, 0]),
-        body("debris", [1, 0, 0], [0, 0, 0]),
-        SafetyConfig(),
-    )
-    rewards = calculate_rewards(
-        ["satellite"], {"satellite": command}, {"satellite": result}, [], [collision], RewardConfig()
-    )
-    assert rewards == {"satellite": -100.0}
+def test_recent_closest_approach_is_found_only_inside_the_lookback() -> None:
+    config = SafetyConfig(safe_separation_meters=1_000)
+    passed = (body("satellite", [0, 0, 0], [0, 0, 0]), body("debris", [300, 500, 0], [0, 10, 0]))
+    approaching = (body("satellite", [0, 0, 0], [0, 0, 0]), body("debris", [300, -500, 0], [0, 10, 0]))
+    long_ago = (body("satellite", [0, 0, 0], [0, 0, 0]), body("debris", [300, 5_000, 0], [0, 10, 0]))
+
+    assert recent_closest_approach(*passed, lookback_seconds=120) == 300
+    assert recent_closest_approach(*approaching, lookback_seconds=120) is None
+    assert recent_closest_approach(*long_ago, lookback_seconds=120) is None
+    assert close_approaches_since(passed, 120, config) == {("satellite", "debris"): 300}
+    assert close_approaches_since(passed, 120, SafetyConfig(safe_separation_meters=200)) == {}
 
 
 def test_receding_pair_has_zero_tca_and_current_miss_distance() -> None:

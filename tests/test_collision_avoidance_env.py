@@ -184,3 +184,14 @@ def test_invalid_actions_are_rejected(bad_actions: np.ndarray) -> None:
 
     with pytest.raises(ValueError):
         env.step(bad_actions)
+
+
+def test_passing_conjunction_is_reported_with_its_realized_miss() -> None:
+    env = make_env()
+
+    approaches = [info["close_approaches"] for *_, info in (env.step(actions()) for _ in range(3))]
+
+    [passed] = [item for step in approaches for item in step]
+    assert set(passed["pair"]) == {"satellite_1", "development_debris"}
+    assert 0.0 <= passed["miss_distance_meters"] < env.safety_config.safe_separation_meters
+    assert approaches[0] == []

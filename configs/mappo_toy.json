@@ -19,12 +19,12 @@
     "num_actions": 7
   },
   "rewards": {
+    "close_approach_penalty": -10.0,
     "collision_penalty": -100.0,
     "delta_v_penalty_per_mps": 1.0,
     "infeasible_maneuver_penalty": -2.0,
-    "resolution_reward": 5.0,
-    "unnecessary_maneuver_penalty": -0.1,
-    "unsafe_penalty": -10.0
+    "shaping_discount": 0.99,
+    "shaping_weight": 10.0
   },
   "safety": {
     "safe_separation_meters": 1000.0,

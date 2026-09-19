@@ -117,3 +117,21 @@ def test_maneuver_defaults_match_the_sizing_decision():
     assert toy == maneuver
     heaviest_mass_kg = 800.0
     assert heaviest_mass_kg * maneuver.commanded_delta_v_mps / maneuver.maximum_thrust_newtons <= maneuver.maximum_burn_duration_seconds
+
+
+def test_shaping_discount_must_match_training_gamma():
+    config = ExperimentConfig(training=TrainingConfig(gamma=0.95))
+
+    with pytest.raises(ValueError, match="shaping_discount"):
+        config.validate()
+
+
+def test_configs_with_removed_reward_fields_are_rejected(tmp_path):
+    config_path = tmp_path / "config.json"
+    ExperimentConfig().save(config_path)
+    raw = json.loads(config_path.read_text())
+    raw["rewards"]["unsafe_penalty"] = -10.0
+    config_path.write_text(json.dumps(raw))
+
+    with pytest.raises(ValueError, match="removed reward fields"):
+        ExperimentConfig.load(config_path)

@@ -48,6 +48,10 @@ environment.
 | `episodes.csv` | One row per policy and episode |
 | `summary.csv` | One row per policy |
 
+`mean_return` includes the reward-shaping offset, which depends only on each
+episode's start state; it is comparable across policies because every policy plays
+the same seeds.
+
 `summary.csv` columns: `collision_rate`, `mean_return`, `mean_unsafe_agent_steps`,
 `mean_final_unsafe_agents` (agents still in an unsafe conjunction when the episode
 ended), `mean_rejected_actions`, `mean_delta_v_per_agent_mps`,
