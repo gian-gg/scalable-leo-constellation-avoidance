@@ -16,7 +16,7 @@ import numpy as np
 from orbitzoo.env import OrbitZoo
 from orbitzoo.thesis.environments.diagnostics import EpisodeDiagnostics
 from orbitzoo.thesis.environments.observations import LocalObservationEncoder, fuel_fraction
-from orbitzoo.thesis.environments.rewards import RewardConfig, calculate_rewards
+from orbitzoo.thesis.environments.rewards import RewardConfig, calculate_rewards, threat_potentials
 from orbitzoo.thesis.environments.safety import PairSafetyAssessment, SafetyConfig, SafetySnapshot, safety_snapshot
 from orbitzoo.thesis.environments.vectorized_observations import CatalogState, encode_local_observations
 from orbitzoo.thesis.evaluation.drift import SlotDeviation, slot_deviation
@@ -118,6 +118,7 @@ class CollisionAvoidanceEnv(OrbitZoo):
             self.observation_encoder.neighborhood_size,
             self.safety_config,
         )
+        self._last_local = local
         return local, global_state
 
     def _snapshot(self) -> SafetySnapshot:
@@ -210,7 +211,7 @@ class CollisionAvoidanceEnv(OrbitZoo):
         if np.any(actions < int(ManeuverAction.NO_OP)) or np.any(actions > int(ManeuverAction.CROSS_TRACK_NEGATIVE)):
             raise ValueError("action IDs must be integers in [0, 6]")
 
-        assessments_before = self._last_snapshot.flagged_assessments()
+        potentials_before = threat_potentials(self._last_local, self.safety_config.safe_separation_meters)
         commands, rejected_agents = self._commands_for_actions(actions)
         thrusts, durations = orbitzoo_action_inputs(commands)
         spacecraft_before = self._spacecraft_by_name()
@@ -234,23 +235,24 @@ class CollisionAvoidanceEnv(OrbitZoo):
         self._last_snapshot = snapshot
         assessments_after = snapshot.flagged_assessments()
         close_approaches = snapshot.recent_close_approaches(self.decision_interval_seconds)
+        local_observations, global_state = self._state()
+        collision_pairs = [assessment.pair for assessment in assessments_after if assessment.is_collision]
         rewards = calculate_rewards(
             self.agent_names,
             results,
-            assessments_before,
-            assessments_after,
+            potentials_before,
+            threat_potentials(local_observations, self.safety_config.safe_separation_meters),
+            {name for pair in collision_pairs for name in pair},
             close_approaches,
             self.safety_config.safe_separation_meters,
             self.reward_config,
             rejected_agents,
         )
         self.step_index += 1
-        collision_pairs = [assessment.pair for assessment in assessments_after if assessment.is_collision]
         self.is_terminated = bool(collision_pairs) or self.step_index >= self.episode_horizon
         self.diagnostics.record_maneuvers(results)
         self.diagnostics.record_minimum_separation(snapshot.minimum_separation())
         self.diagnostics.collision_pairs.extend(collision_pairs)
-        local_observations, global_state = self._state()
         dones = np.full(self.num_agents, self.is_terminated, dtype=bool)
         info = {
             "step_index": self.step_index,

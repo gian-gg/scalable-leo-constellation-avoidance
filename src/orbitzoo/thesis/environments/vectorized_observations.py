@@ -17,6 +17,7 @@ from orbitzoo.thesis.environments.observations import (
     POSITION_SCALE_METERS,
     VELOCITY_SCALE_MPS,
 )
+from orbitzoo.thesis.environments.prediction import predict_closest_approach
 from orbitzoo.thesis.environments.safety import SafetyConfig
 
 DEFAULT_AGENT_BATCH_SIZE = 64
@@ -143,6 +144,7 @@ def encode_local_observations(
     horizon = safety.screening_horizon_seconds
     safe_separation = safety.safe_separation_meters
     bases = rsw_bases(state.positions[agent_indices], state.velocities[agent_indices])
+    chosen: list[tuple[int, int, int]] = []
     for ranked in ranked_batches(state, agent_indices, retained, safety, agent_batch_size):
         for row, neighbors in enumerate(ranked.neighbors):
             basis = bases[ranked.start + row]
@@ -157,4 +159,43 @@ def encode_local_observations(
                 block[9] = float(state.is_agent[neighbor])
                 block[10] = state.fuel_fractions[neighbor] if state.is_agent[neighbor] else 0.0
                 block[11] = 1.0
+                chosen.append((ranked.start + row, slot, int(neighbor)))
+    if safety.threat_prediction == "j2" and chosen:
+        apply_curved_prediction(
+            observations,
+            chosen,
+            state.positions[agent_indices],
+            state.velocities[agent_indices],
+            state.positions,
+            state.velocities,
+            safety,
+        )
     return observations
+
+
+def apply_curved_prediction(
+    observations: np.ndarray,
+    chosen: list[tuple[int, int, int]],
+    agent_positions: np.ndarray,
+    agent_velocities: np.ndarray,
+    positions: np.ndarray,
+    velocities: np.ndarray,
+    safety: SafetyConfig,
+) -> None:
+    """Replace each chosen neighbour's time-to-closest-approach and miss features with the J2 prediction."""
+    rows = np.array([item[0] for item in chosen])
+    slots = np.array([item[1] for item in chosen])
+    neighbors = np.array([item[2] for item in chosen])
+    approach = predict_closest_approach(
+        agent_positions[rows],
+        agent_velocities[rows],
+        positions[neighbors],
+        velocities[neighbors],
+        safety.screening_horizon_seconds,
+        safety.prediction_step_seconds,
+    )
+    columns = OWN_FEATURE_DIM + slots * NEIGHBOR_FEATURE_DIM
+    observations[rows, columns + 6] = approach.time_seconds / safety.screening_horizon_seconds
+    observations[rows, columns + 7] = np.minimum(
+        approach.miss_distance_m / safety.safe_separation_meters, MAX_NORMALIZED_MISS_DISTANCE
+    )

@@ -14,6 +14,16 @@ def mean_motions(positions: np.ndarray) -> np.ndarray:
     return np.sqrt(EARTH_GRAVITATIONAL_PARAMETER / np.linalg.norm(positions, axis=1) ** 3)
 
 
+def clohessy_wiltshire_displacement(
+    delta_v_rsw: np.ndarray, mean_motion: float, elapsed_seconds: float
+) -> np.ndarray:
+    """RSW position change after an impulsive delta-v on a circular orbit."""
+    offsets, _ = propagate_hill_states(
+        np.zeros((1, 3)), np.asarray(delta_v_rsw, dtype=float)[np.newaxis], np.array([mean_motion]), elapsed_seconds
+    )
+    return offsets[0]
+
+
 def propagate_hill_states(
     offsets: np.ndarray, rates: np.ndarray, mean_motion: np.ndarray, elapsed_seconds: float
 ) -> tuple[np.ndarray, np.ndarray]:

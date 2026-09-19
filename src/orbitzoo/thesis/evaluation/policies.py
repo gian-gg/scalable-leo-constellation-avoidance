@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from typing import Protocol
 
 import numpy as np
@@ -13,12 +12,12 @@ from orbitzoo.thesis.environments.observations import (
     POSITION_SCALE_METERS,
     VELOCITY_SCALE_MPS,
 )
+from orbitzoo.thesis.environments.prediction import predict_closest_approach
 from orbitzoo.thesis.environments.safety import SafetyConfig
+from orbitzoo.thesis.environments.vectorized_observations import rsw_bases
 from orbitzoo.thesis.maneuvers.actions import ManeuverAction
 from orbitzoo.thesis.maneuvers.contract import ManeuverConfig
-
-EARTH_GRAVITATIONAL_PARAMETER = 3.986004418e14
-BURN_ACTIONS = tuple(action for action in ManeuverAction if action is not ManeuverAction.NO_OP)
+from orbitzoo.thesis.maneuvers.sizing import BURN_ACTIONS, EncounterGeometry, miss_displacement_per_mps
 
 
 class EvaluationPolicy(Protocol):
@@ -38,25 +37,12 @@ class NoOpPolicy:
         return np.zeros(local_observations.shape[0], dtype=np.int64)
 
 
-def clohessy_wiltshire_displacement(
-    delta_v_rsw: np.ndarray, mean_motion: float, elapsed_seconds: float
-) -> np.ndarray:
-    """RSW position change after an impulsive delta-v on a circular orbit."""
-    radial, along_track, cross_track = delta_v_rsw
-    angle = mean_motion * elapsed_seconds
-    sine, cosine = math.sin(angle), math.cos(angle)
-    return np.array(
-        [
-            radial / mean_motion * sine + 2 * along_track / mean_motion * (1 - cosine),
-            2 * radial / mean_motion * (cosine - 1)
-            + along_track / mean_motion * (4 * sine - 3 * angle),
-            cross_track / mean_motion * sine,
-        ]
-    )
-
-
 class ClohessyWiltshireAvoidancePolicy:
-    """Burns only when the top-ranked threat is unsafe, choosing the burn that most increases its predicted miss distance."""
+    """Burns only when the top-ranked threat is predicted unsafe, choosing the burn that most widens its miss.
+
+    The miss is predicted along curved J2 orbits reconstructed from the agent's own observation, and each
+    burn's effect is the Clohessy–Wiltshire displacement across the relative velocity, as in the sizing study.
+    """
 
     name = "rule"
 
@@ -64,31 +50,44 @@ class ClohessyWiltshireAvoidancePolicy:
         self.delta_v = maneuver_config.commanded_delta_v_mps
         self.safety_config = safety_config
 
-    def _action_for(self, observation: np.ndarray) -> ManeuverAction:
-        block = observation[OWN_FEATURE_DIM:]
-        is_valid, normalized_miss = block[11] > 0.5, block[7]
-        if not is_valid or normalized_miss > 1.0:
-            return ManeuverAction.NO_OP
-        relative_position = block[0:3].astype(float) * POSITION_SCALE_METERS
-        relative_velocity = block[3:6].astype(float) * VELOCITY_SCALE_MPS
-        time_to_closest_approach = float(block[6]) * self.safety_config.screening_horizon_seconds
-        if time_to_closest_approach <= 0:
-            return ManeuverAction.NO_OP
-        orbit_radius = np.linalg.norm(observation[0:3].astype(float) * POSITION_SCALE_METERS)
-        mean_motion = math.sqrt(EARTH_GRAVITATIONAL_PARAMETER / orbit_radius**3)
-        miss_vector = relative_position + relative_velocity * time_to_closest_approach
-        best_action, best_miss = ManeuverAction.NO_OP, float(np.linalg.norm(miss_vector))
-        for action in BURN_ACTIONS:
-            displacement = clohessy_wiltshire_displacement(
-                self.delta_v * np.asarray(action.rsw_unit_vector), mean_motion, time_to_closest_approach
-            )
-            miss = float(np.linalg.norm(miss_vector - displacement))
-            if miss > best_miss:
-                best_action, best_miss = action, miss
-        return best_action
-
     def choose(self, local_observations: np.ndarray) -> np.ndarray:
-        return np.array([self._action_for(row) for row in local_observations], dtype=np.int64)
+        actions = np.zeros(local_observations.shape[0], dtype=np.int64)
+        blocks = local_observations[:, OWN_FEATURE_DIM:]
+        threatened = np.flatnonzero((blocks[:, 11] > 0.5) & (blocks[:, 7] <= 1.0) & (blocks[:, 6] > 0))
+        if threatened.size == 0:
+            return actions
+        rows = local_observations[threatened].astype(float)
+        own_positions = rows[:, 0:3] * POSITION_SCALE_METERS
+        own_velocities = rows[:, 3:6] * VELOCITY_SCALE_MPS
+        bases = rsw_bases(own_positions, own_velocities)
+        threat_positions = own_positions + np.einsum("aji,aj->ai", bases, rows[:, 7:10] * POSITION_SCALE_METERS)
+        threat_velocities = own_velocities + np.einsum("aji,aj->ai", bases, rows[:, 10:13] * VELOCITY_SCALE_MPS)
+        approach = predict_closest_approach(
+            own_positions,
+            own_velocities,
+            threat_positions,
+            threat_velocities,
+            self.safety_config.screening_horizon_seconds,
+            self.safety_config.prediction_step_seconds,
+        )
+        for index, row in enumerate(threatened):
+            encounter = EncounterGeometry(
+                event_id=0,
+                maneuvering_norad_id=0,
+                threat_norad_id=0,
+                miss_vector_m=approach.miss_vectors_m[index],
+                relative_velocity_mps=approach.relative_velocities_mps[index],
+                agent_position_m=approach.first_positions_m[index],
+                agent_velocity_mps=approach.first_velocities_mps[index],
+            )
+            best_action, best_miss = ManeuverAction.NO_OP, encounter.miss_distance_m
+            for action in BURN_ACTIONS:
+                gain = miss_displacement_per_mps(encounter, action, [float(approach.time_seconds[index])])
+                miss = float(np.linalg.norm(encounter.miss_vector_m + self.delta_v * gain))
+                if miss > best_miss:
+                    best_action, best_miss = action, miss
+            actions[row] = best_action
+        return actions
 
 
 class MAPPOActorPolicy:

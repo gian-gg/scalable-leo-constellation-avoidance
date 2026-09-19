@@ -16,16 +16,25 @@ class KinematicBody(Protocol):
     radius: float
 
 
+THREAT_PREDICTIONS = ("linear", "j2")
+
+
 @dataclass(frozen=True)
 class SafetyConfig:
     """Thresholds for fast conjunction screening, in SI units."""
 
     safe_separation_meters: float = 1_000.0
     screening_horizon_seconds: float = 1_800.0
+    threat_prediction: str = "j2"
+    prediction_step_seconds: float = 10.0
 
     def validate(self) -> None:
         if self.safe_separation_meters <= 0 or self.screening_horizon_seconds <= 0:
             raise ValueError("safety thresholds must be positive")
+        if self.threat_prediction not in THREAT_PREDICTIONS:
+            raise ValueError(f"threat_prediction must be one of {THREAT_PREDICTIONS}")
+        if self.prediction_step_seconds <= 0:
+            raise ValueError("prediction_step_seconds must be positive")
 
 
 @dataclass(frozen=True)

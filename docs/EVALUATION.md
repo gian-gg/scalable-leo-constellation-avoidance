@@ -23,12 +23,16 @@ Without `--policy`, the no-op and rule-based baselines are compared.
 ### Rule-based baseline
 
 For each agent, the rule reads only the top-ranked neighbour block of its own
-observation. If that threat is valid, unsafe (predicted miss at or below the safe
-separation), and still approaching, it predicts the threat's miss vector at time of
-closest approach from the linear relative motion. It then evaluates each of the six
-burn directions with the Clohessy–Wiltshire equations for an impulsive burn of the
-configured delta-v, and takes the burn that most increases the predicted miss
-distance. Otherwise it coasts.
+observation. If that threat is valid, unsafe (curved-orbit predicted miss at or below
+the safe separation), and still approaching, it reconstructs both objects' states
+from the observation and predicts the miss vector at closest approach along curved
+J2 orbits. It then evaluates each of the six burn directions with the
+Clohessy–Wiltshire displacement across the relative velocity, as in the maneuver
+sizing study, and takes the burn that most increases the predicted miss.
+Otherwise it coasts.
+
+On 20 held-out stage-1 scenarios it cut real close approaches from 8.55 to 0.45 per
+episode (95%) using 0.53 m/s per agent, consistent with the sizing study.
 
 The rule uses the same information as the trained actor, so it answers whether
 learning adds anything beyond a physics-aware single-threat heuristic.

@@ -176,7 +176,8 @@ class LocalObservationEncoder:
         body_indices = {body.name: index for index, body in enumerate(bodies)}
 
         local_rows: list[np.ndarray] = []
-        for agent_name in agent_names:
+        chosen: list[tuple[int, int, int]] = []
+        for row, agent_name in enumerate(agent_names):
             observer = body_by_name[agent_name]
             ranked_neighbors: list[
                 tuple[tuple[bool, bool, float, float, int], Any, PairSafetyAssessment]
@@ -201,6 +202,10 @@ class LocalObservationEncoder:
                 self._neighbor_features(observer, neighbor, assessment, maneuverable_names)
                 for _, neighbor, assessment in ranked_neighbors[: self.neighborhood_size]
             ]
+            chosen += [
+                (row, slot, body_indices[neighbor.name])
+                for slot, (_, neighbor, _) in enumerate(ranked_neighbors[: self.neighborhood_size])
+            ]
             blocks.extend(
                 np.zeros(NEIGHBOR_FEATURE_DIM, dtype=np.float32)
                 for _ in range(self.neighborhood_size - len(blocks))
@@ -209,8 +214,18 @@ class LocalObservationEncoder:
                 np.concatenate((self._own_features(observer, maneuverable_names), *blocks))
             )
 
+        local_observations = np.stack(local_rows).astype(np.float32)
+        if self.safety_config.threat_prediction == "j2" and chosen:
+            from orbitzoo.thesis.environments.vectorized_observations import apply_curved_prediction
+
+            positions = np.asarray([body.position for body in bodies], dtype=float)
+            velocities = np.asarray([body.velocity for body in bodies], dtype=float)
+            observers = [body_indices[name] for name in agent_names]
+            apply_curved_prediction(
+                local_observations, chosen, positions[observers], velocities[observers], positions, velocities, self.safety_config
+            )
         return ObservationState(
-            local_observations=np.stack(local_rows).astype(np.float32),
+            local_observations=local_observations,
             global_state=self.global_state(bodies, agent_names),
         )
 

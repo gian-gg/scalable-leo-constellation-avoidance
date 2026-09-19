@@ -39,9 +39,20 @@ The feature order for one neighbour block is:
 | valid mask | 1 | binary |
 
 Candidate neighbours include both maneuvering satellites and debris. They are
-ordered deterministically by collision status, unsafe-conjunction status,
-predicted miss distance, and time to closest approach. Relative vectors use the
-observing satellite's RSW frame, matching the maneuver action frame.
+ranked deterministically by collision status, unsafe-conjunction status, predicted
+miss distance, and time to closest approach under straight-line relative motion,
+the screen the calibration validated. Relative vectors use the observing
+satellite's RSW frame, matching the maneuver action frame.
+
+For the neighbours that make the cut, the time to closest approach and predicted
+miss features are then recomputed along curved orbits (`threat_prediction = "j2"`):
+both objects are propagated over the screening horizon with point-mass gravity plus
+J2, in 10 s RK4 steps with linear refinement between samples. Straight-line
+extrapolation overestimates the miss of crossing objects until the last few
+minutes; on generated scenarios the curved prediction first flags a real close call
+about 11 minutes ahead, against about 5.5 minutes for the straight line, and matches
+the environment's own propagation to tens of metres. `threat_prediction = "linear"`
+restores the straight-line features.
 Every moving body must therefore have a unique, non-empty name.
 
 The critic-only global state uses a stable agent-first ordering and nine values
@@ -112,7 +123,7 @@ separation, one at contact. A close approach during the step is found by tracing
 each pair's linear relative motion back over the step from its post-step state.
 
 The potential Φ is minus the shortfall of the satellite's worst still-approaching
-predicted miss (zero after a collision). The shaping term rewards each step that
+predicted miss, read from its own observation (zero after a collision). The shaping term rewards each step that
 widens the predicted miss and penalises each step that narrows it, so progress is
 visible long before the encounter. Because it is potential-based and
 `shaping_discount` must equal the training discount, it does not change which

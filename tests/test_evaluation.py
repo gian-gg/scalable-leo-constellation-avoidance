@@ -1,5 +1,6 @@
 import csv
 import dataclasses
+from datetime import datetime, timezone
 import math
 from pathlib import Path
 
@@ -26,9 +27,13 @@ from orbitzoo.thesis.evaluation.evaluator import (
 from orbitzoo.thesis.evaluation.policies import (
     ClohessyWiltshireAvoidancePolicy,
     NoOpPolicy,
-    clohessy_wiltshire_displacement,
 )
+from orbitzoo.thesis.environments.prediction import predict_closest_approach
+from orbitzoo.thesis.environments.vectorized_observations import CatalogState, encode_local_observations, rsw_bases
 from orbitzoo.thesis.maneuvers.actions import ManeuverAction
+from orbitzoo.thesis.maneuvers.sizing import encounter_from_states, miss_displacement_per_mps
+from orbitzoo.thesis.scenarios.propagation import propagate
+from orbitzoo.thesis.scalability.dynamics import clohessy_wiltshire_displacement
 from orbitzoo.thesis.maneuvers.contract import ManeuverConfig
 from orbitzoo.thesis.runtime import initialize_run_directory
 from orbitzoo.thesis.training.trainer import train
@@ -88,28 +93,54 @@ def test_rule_policy_coasts_when_threat_is_safe_absent_or_past() -> None:
     assert policy.choose(rows).tolist() == [ManeuverAction.NO_OP] * 3
 
 
-def test_rule_policy_burns_to_move_away_from_a_crossing_threat() -> None:
+def crossing_observation(miss_offset: list[float], meeting_seconds: float = 600.0) -> np.ndarray:
+    """The agent's encoded view of a polar-orbit object crossing its equatorial orbit, built backwards in J2 physics."""
+    epoch = datetime(2026, 9, 15, 12, tzinfo=timezone.utc)
+    speed = ORBIT_RADIUS * MEAN_MOTION
+    at_meeting = {
+        "agent": (np.array([ORBIT_RADIUS, 0.0, 0.0]), np.array([0.0, speed, 0.0])),
+        "threat": (np.array([ORBIT_RADIUS, 0.0, 0.0]) + np.array(miss_offset), np.array([0.0, 0.0, speed])),
+    }
+    start = {name: propagate(*state, epoch, -meeting_seconds) for name, state in at_meeting.items()}
+    state = CatalogState(
+        np.array([start["agent"][0], start["threat"][0]]),
+        np.array([start["agent"][1], start["threat"][1]]),
+        np.ones(2),
+        np.array([True, False]),
+        np.zeros(2),
+    )
+    return encode_local_observations(state, np.array([0]), 1, SAFETY)
+
+
+def test_curved_features_see_the_crossing_minutes_ahead() -> None:
+    observation = crossing_observation([300.0, 0.0, 0.0])
+
+    assert observation[0, OWN_FEATURE_DIM + 6] * SAFETY.screening_horizon_seconds == pytest.approx(600.0, abs=2.0)
+    assert observation[0, OWN_FEATURE_DIM + 7] * SAFETY.safe_separation_meters == pytest.approx(300.0, abs=20.0)
+
+
+def test_rule_policy_choice_maximizes_the_predicted_miss() -> None:
     policy = rule_policy()
-    cross_track_offset = observation([0, 7_500 * 600, 200], [0, -7_500, 0])
+    observation = crossing_observation([300.0, 0.0, 0.0])
 
-    action = ManeuverAction(policy.choose(cross_track_offset[np.newaxis])[0])
+    chosen = ManeuverAction(policy.choose(observation)[0])
 
-    assert action is ManeuverAction.CROSS_TRACK_NEGATIVE
-
-
-def test_rule_policy_choice_maximizes_predicted_miss() -> None:
-    policy = rule_policy()
-    row = observation([150, 3_000, -80], [0, -5, 0])
-    block = row[OWN_FEATURE_DIM:].astype(float)
-    tca = float(block[6]) * SAFETY.screening_horizon_seconds
-    miss = block[0:3] * POSITION_SCALE_METERS + block[3:6] * VELOCITY_SCALE_MPS * tca
-
-    chosen = ManeuverAction(policy.choose(row[np.newaxis])[0])
+    row = observation[0].astype(float)
+    own = (row[0:3] * POSITION_SCALE_METERS, row[3:6] * VELOCITY_SCALE_MPS)
+    basis = rsw_bases(own[0][np.newaxis], own[1][np.newaxis])[0]
+    threat = (own[0] + basis.T @ (row[7:10] * POSITION_SCALE_METERS), own[1] + basis.T @ (row[10:13] * VELOCITY_SCALE_MPS))
+    approach = predict_closest_approach(own[0][None], own[1][None], threat[0][None], threat[1][None], 1_800.0)
+    encounter = encounter_from_states(0, 0, 0, (approach.first_positions_m[0], approach.first_velocities_mps[0]),
+                                      (approach.first_positions_m[0] + approach.miss_vectors_m[0],
+                                       approach.first_velocities_mps[0] + approach.relative_velocities_mps[0]))
 
     def predicted_miss(action: ManeuverAction) -> float:
-        displacement = clohessy_wiltshire_displacement(np.asarray(action.rsw_unit_vector), MEAN_MOTION, tca)
-        return float(np.linalg.norm(miss - displacement))
+        if action is ManeuverAction.NO_OP:
+            return encounter.miss_distance_m
+        gain = miss_displacement_per_mps(encounter, action, [float(approach.time_seconds[0])])
+        return float(np.linalg.norm(encounter.miss_vector_m + LARGE_MANEUVER.commanded_delta_v_mps * gain))
 
+    assert chosen is not ManeuverAction.NO_OP
     assert predicted_miss(chosen) == max(predicted_miss(action) for action in ManeuverAction)
 
 

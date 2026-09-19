@@ -8,7 +8,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Mapping
 
-from orbitzoo.thesis.environments.safety import PairSafetyAssessment
+import numpy as np
+
+from orbitzoo.thesis.environments.observations import NEIGHBOR_FEATURE_DIM, OWN_FEATURE_DIM
 from orbitzoo.thesis.maneuvers.contract import ManeuverResult
 
 REMOVED_REWARD_FIELDS = ("unsafe_penalty", "resolution_reward", "unnecessary_maneuver_penalty")
@@ -41,21 +43,20 @@ def shortfall(miss_distance_meters: float, safe_separation_meters: float) -> flo
     return max(0.0, 1.0 - miss_distance_meters / safe_separation_meters)
 
 
-def threat_potential(agent: str, assessments: list[PairSafetyAssessment], safe_separation_meters: float) -> float:
-    """Minus the shortfall of the agent's worst still-approaching predicted miss."""
-    approaching = [
-        assessment.predicted_miss_distance_meters
-        for assessment in assessments
-        if agent in assessment.pair and assessment.time_to_closest_approach_seconds > 0
-    ]
-    return -shortfall(min(approaching), safe_separation_meters) if approaching else 0.0
+def threat_potentials(local_observations: np.ndarray, safe_separation_meters: float) -> np.ndarray:
+    """Minus the shortfall of each agent's worst still-approaching threat, read from its own observation."""
+    blocks = local_observations[:, OWN_FEATURE_DIM:].reshape(len(local_observations), -1, NEIGHBOR_FEATURE_DIM)
+    approaching = (blocks[:, :, 11] > 0.5) & (blocks[:, :, 6] > 0)
+    misses = np.where(approaching, blocks[:, :, 7] * safe_separation_meters, np.inf).min(axis=1)
+    return -np.clip(1.0 - misses / safe_separation_meters, 0.0, 1.0)
 
 
 def calculate_rewards(
     agent_names: list[str],
     results: Mapping[str, ManeuverResult],
-    assessments_before: list[PairSafetyAssessment],
-    assessments_after: list[PairSafetyAssessment],
+    potentials_before: np.ndarray,
+    potentials_after: np.ndarray,
+    collided_agents: set[str],
     close_approaches: Mapping[tuple[str, str], float],
     safe_separation_meters: float,
     config: RewardConfig,
@@ -63,13 +64,13 @@ def calculate_rewards(
 ) -> dict[str, float]:
     """Individual rewards from fuel, realized close approaches, collisions, and potential-based shaping.
 
-    ``close_approaches`` maps each pair whose closest approach happened during the step to its miss distance.
+    Potentials are in ``agent_names`` order; ``close_approaches`` maps each pair whose closest approach
+    happened during the step to its miss distance.
     """
     config.validate()
     rejected_agents = rejected_agents or set()
-    collided = {name for assessment in assessments_after if assessment.is_collision for name in assessment.pair}
     rewards: dict[str, float] = {}
-    for agent in agent_names:
+    for index, agent in enumerate(agent_names):
         reward = -config.delta_v_penalty_per_mps * results[agent].actual_delta_v_mps
         if agent in rejected_agents:
             reward += config.infeasible_maneuver_penalty
@@ -77,11 +78,10 @@ def calculate_rewards(
             shortfall(miss, safe_separation_meters) for pair, miss in close_approaches.items() if agent in pair
         )
         next_potential = 0.0
-        if agent in collided:
+        if agent in collided_agents:
             reward += config.collision_penalty
         else:
-            next_potential = threat_potential(agent, assessments_after, safe_separation_meters)
-        current_potential = threat_potential(agent, assessments_before, safe_separation_meters)
-        reward += config.shaping_weight * (config.shaping_discount * next_potential - current_potential)
+            next_potential = float(potentials_after[index])
+        reward += config.shaping_weight * (config.shaping_discount * next_potential - float(potentials_before[index]))
         rewards[agent] = reward
     return rewards
