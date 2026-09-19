@@ -96,6 +96,13 @@ def test_realized_close_approach_is_charged_by_its_shortfall() -> None:
     assert reward(approaches={("other", "debris"): 10.0}) == 0.0
 
 
+def test_flat_penalty_charges_every_close_approach_once() -> None:
+    config = RewardConfig(close_approach_flat_penalty=-10.0)
+    approaches = {("sat", "debris"): 900.0, ("sat", "other"): 400.0, ("other", "debris"): 100.0}
+
+    assert reward(approaches=approaches, config=config) == pytest.approx(-20.0 - 10.0 * (0.1 + 0.6))
+
+
 def test_collision_dominates_and_ends_the_potential() -> None:
     assert reward(-0.9, -1.0, collided={"sat"}) == pytest.approx(-100.0 + 10.0 * 0.9)
 
@@ -122,6 +129,7 @@ def test_shaping_cancels_over_a_cycle_that_returns_to_the_same_state() -> None:
         {"shaping_discount": 0.0},
         {"delta_v_penalty_per_mps": -1.0},
         {"infeasible_maneuver_penalty": 1.0},
+        {"close_approach_flat_penalty": 1.0},
     ],
 )
 def test_reward_config_rejects_wrong_signs(overrides) -> None:

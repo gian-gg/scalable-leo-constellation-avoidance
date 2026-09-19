@@ -117,6 +117,7 @@ Each satellite receives an individual reward every decision step:
 | Fuel | `-delta_v_penalty_per_mps` × actual delta-v |
 | Rejected action | `infeasible_maneuver_penalty` |
 | Close approach | `close_approach_penalty` × shortfall, for each encounter whose closest approach happened during the step |
+| Any close approach | `close_approach_flat_penalty` once per such encounter, however shallow (0 by default) |
 | Collision | `collision_penalty` |
 | Shaping | `shaping_weight` × (`shaping_discount` × Φ(next) − Φ(current)) |
 

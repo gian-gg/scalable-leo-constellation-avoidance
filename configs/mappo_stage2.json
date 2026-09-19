@@ -19,6 +19,7 @@
     "num_actions": 7
   },
   "rewards": {
+    "close_approach_flat_penalty": -10.0,
     "close_approach_penalty": -30.0,
     "collision_penalty": -100.0,
     "delta_v_penalty_per_mps": 1.0,

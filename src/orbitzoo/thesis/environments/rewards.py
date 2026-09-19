@@ -22,6 +22,7 @@ class RewardConfig:
 
     collision_penalty: float = -100.0
     close_approach_penalty: float = -10.0
+    close_approach_flat_penalty: float = 0.0
     shaping_weight: float = 10.0
     shaping_discount: float = 0.99
     delta_v_penalty_per_mps: float = 1.0
@@ -30,6 +31,8 @@ class RewardConfig:
     def validate(self) -> None:
         if self.collision_penalty >= 0 or self.close_approach_penalty >= 0:
             raise ValueError("collision_penalty and close_approach_penalty must be negative")
+        if self.close_approach_flat_penalty > 0:
+            raise ValueError("close_approach_flat_penalty cannot be positive")
         if self.shaping_weight < 0 or self.delta_v_penalty_per_mps < 0:
             raise ValueError("shaping_weight and delta_v_penalty_per_mps cannot be negative")
         if not 0 < self.shaping_discount <= 1:
@@ -74,9 +77,9 @@ def calculate_rewards(
         reward = -config.delta_v_penalty_per_mps * results[agent].actual_delta_v_mps
         if agent in rejected_agents:
             reward += config.infeasible_maneuver_penalty
-        reward += config.close_approach_penalty * sum(
-            shortfall(miss, safe_separation_meters) for pair, miss in close_approaches.items() if agent in pair
-        )
+        own_misses = [miss for pair, miss in close_approaches.items() if agent in pair]
+        reward += config.close_approach_penalty * sum(shortfall(miss, safe_separation_meters) for miss in own_misses)
+        reward += config.close_approach_flat_penalty * len(own_misses)
         next_potential = 0.0
         if agent in collided_agents:
             reward += config.collision_penalty
