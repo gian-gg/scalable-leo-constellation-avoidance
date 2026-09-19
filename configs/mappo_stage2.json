@@ -19,12 +19,12 @@
     "num_actions": 7
   },
   "rewards": {
-    "close_approach_penalty": -10.0,
+    "close_approach_penalty": -30.0,
     "collision_penalty": -100.0,
     "delta_v_penalty_per_mps": 1.0,
     "infeasible_maneuver_penalty": -2.0,
     "shaping_discount": 0.99,
-    "shaping_weight": 10.0
+    "shaping_weight": 30.0
   },
   "safety": {
     "safe_separation_meters": 1000.0,
@@ -73,7 +73,7 @@
       128,
       64
     ],
-    "actor_learning_rate": 0.0003,
+    "actor_learning_rate": 0.0001,
     "checkpoint_interval": 5,
     "critic_hidden_dims": [
       256,
@@ -81,7 +81,7 @@
     ],
     "critic_learning_rate": 0.001,
     "device": "cpu",
-    "entropy_coefficient": 0.01,
+    "entropy_coefficient": 0.05,
     "gae_lambda": 0.95,
     "gamma": 0.99,
     "initial_actor_checkpoint": "runs/stage1/checkpoints/latest.pt",

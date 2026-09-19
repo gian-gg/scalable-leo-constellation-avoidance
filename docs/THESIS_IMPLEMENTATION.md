@@ -87,6 +87,8 @@ conjunctions, maneuver-induced secondary conjunctions, delta-v, and per-stage co
 delta-v and minimum thrust from the reference conjunctions.
 [Training scenarios](TRAINING_SCENARIOS.md) are generated per episode from real
 orbits and real close-call geometry, in a 16 → 64 → 150 agent curriculum.
+[Training trials](TRAINING_TRIALS.md) record the short runs that chose the reward
+weights and exploration settings used by the curriculum.
 
 The actor now receives fixed-width, threat-ranked local observations containing
 `k` relative-neighbour blocks with explicit padding masks. The critic receives

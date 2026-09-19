@@ -131,10 +131,11 @@ policy is optimal and cannot be farmed by oscillating. Its episode total depends
 only on the start state, so absolute returns include a constant offset: compare
 policies on the same seeds.
 
-Default weights are sized to the 0.5 m/s maneuver: one burn costs 0.5, a 500 m
-close approach costs 5, and a collision costs 100, so safety dominates fuel and
-collisions dominate near misses. The weights still require sensitivity analysis
-before thesis results are reported.
+The code defaults charge a 500 m close approach 5 against 0.5 per burn. The training
+curriculum uses a close-approach penalty and shaping weight of 30 instead (a 500 m
+close approach costs 15), chosen in [training trials](TRAINING_TRIALS.md) because
+with 10 the policy stopped exploring and learned never to maneuver. A collision
+costs 100 in both, more than any near miss.
 
 `env.slot_deviation()` compares each agent with a copy of its initial state
 propagated without maneuvers, under the same gravity model, and returns its offset
