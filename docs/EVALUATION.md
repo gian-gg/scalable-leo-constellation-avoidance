@@ -52,3 +52,18 @@ environment.
 `mean_final_unsafe_agents` (agents still in an unsafe conjunction when the episode
 ended), `mean_rejected_actions`, `mean_delta_v_per_agent_mps`,
 `mean_minimum_separation_meters`, and `minimum_separation_meters` (worst episode).
+
+## Implicit coordination
+
+Satellites never coordinate explicitly: there is no priority rule and no
+communication. Any coordination must emerge from each satellite acting on its own
+local observation. To measure it, every satellite-to-satellite conjunction is
+classified by how many of its two satellites maneuvered (`none`, `one`, `both`) and
+whether it was resolved. Columns `pair_<group>_maneuvered` count conjunctions and
+`pair_<group>_resolved` count those resolved.
+
+In `oz evaluate`, a pair is tracked from the first decision at which it is unsafe;
+a member counts as maneuvering if it burned while the pair was unsafe. The pair is
+resolved only if it stopped being unsafe while its predicted closest approach was
+still more than one decision interval away, so flying past each other does not
+count.

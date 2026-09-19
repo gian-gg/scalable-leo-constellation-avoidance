@@ -106,6 +106,10 @@ class CollisionAvoidanceEnv(OrbitZoo):
     def _assessments(self) -> list[PairSafetyAssessment]:
         return assess_all_pairs(self._moving_bodies(), self.safety_config)
 
+    def unsafe_assessments(self) -> list[PairSafetyAssessment]:
+        """Assessments of body pairs currently predicted to pass within the safe separation."""
+        return [assessment for assessment in self._assessments() if assessment.is_unsafe]
+
     @staticmethod
     def _minimum_separation(assessments: list[PairSafetyAssessment]) -> float:
         return min(

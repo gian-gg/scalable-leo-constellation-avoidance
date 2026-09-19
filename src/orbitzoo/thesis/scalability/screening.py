@@ -98,25 +98,22 @@ class ConjunctionTracker:
 
 def match_events(
     reference: list[ConjunctionEvent], candidate: list[ConjunctionEvent], tolerance_seconds: float
-) -> tuple[int, list[ConjunctionEvent]]:
-    """Count reference events also present in ``candidate`` and return candidate events absent from ``reference``."""
-    by_pair: dict[tuple[int, int], list[float]] = {}
-    for event in reference:
-        by_pair.setdefault((event.first_index, event.second_index), []).append(event.tca_seconds)
-    matched_reference: set[tuple[int, int, float]] = set()
+) -> tuple[list[bool], list[ConjunctionEvent]]:
+    """Flag which reference events recur in ``candidate``, and return candidate events absent from ``reference``."""
+    open_reference: dict[tuple[int, int], list[int]] = {}
+    for index, event in enumerate(reference):
+        open_reference.setdefault((event.first_index, event.second_index), []).append(index)
+    recurs = [False] * len(reference)
     unmatched: list[ConjunctionEvent] = []
     for event in candidate:
-        pair = (event.first_index, event.second_index)
+        indices = open_reference.get((event.first_index, event.second_index), [])
         match = next(
-            (
-                tca
-                for tca in by_pair.get(pair, [])
-                if abs(tca - event.tca_seconds) <= tolerance_seconds and (*pair, tca) not in matched_reference
-            ),
+            (index for index in indices if abs(reference[index].tca_seconds - event.tca_seconds) <= tolerance_seconds),
             None,
         )
         if match is None:
             unmatched.append(event)
         else:
-            matched_reference.add((*pair, match))
-    return len(matched_reference), unmatched
+            recurs[match] = True
+            indices.remove(match)
+    return recurs, unmatched

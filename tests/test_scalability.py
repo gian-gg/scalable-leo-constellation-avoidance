@@ -181,9 +181,9 @@ def test_match_events_counts_shared_events_and_returns_new_ones() -> None:
     shifted = ConjunctionEvent(0, 1, 102.0, 450.0, False)
     new = ConjunctionEvent(0, 3, 400.0, 800.0, False)
 
-    matched, unmatched = match_events(reference, [shifted, new], tolerance_seconds=300.0)
+    recurs, unmatched = match_events(reference, [shifted, new], tolerance_seconds=300.0)
 
-    assert matched == 1
+    assert recurs == [True, False]
     assert unmatched == [new]
 
 

@@ -6,7 +6,7 @@ See docs/EVALUATION.md.
 from __future__ import annotations
 
 import csv
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 import json
 from pathlib import Path
 from typing import Callable, Sequence
@@ -18,6 +18,7 @@ from orbitzoo.thesis.config import ExperimentConfig
 from orbitzoo.thesis.environments.collision_avoidance import CollisionAvoidanceEnv
 from orbitzoo.thesis.environments.episodes import EpisodeSummary, play_episode
 from orbitzoo.thesis.environments.scenarios import build_environment
+from orbitzoo.thesis.evaluation.coordination import COORDINATION_COLUMNS, CoordinationCounts
 from orbitzoo.thesis.evaluation.policies import (
     ClohessyWiltshireAvoidancePolicy,
     EvaluationPolicy,
@@ -27,7 +28,10 @@ from orbitzoo.thesis.evaluation.policies import (
 from orbitzoo.thesis.runtime import environment_info
 
 EVALUATION_SEED_OFFSET = 1_000_000
-EPISODE_FIELDS = tuple(EpisodeSummary.__dataclass_fields__)
+EPISODE_FIELDS = (
+    *(name for name in EpisodeSummary.__dataclass_fields__ if name != "coordination"),
+    *COORDINATION_COLUMNS,
+)
 
 
 @dataclass(frozen=True)
@@ -44,6 +48,22 @@ class PolicySummary:
     mean_delta_v_per_agent_mps: float
     mean_minimum_separation_meters: float
     minimum_separation_meters: float
+    coordination: CoordinationCounts
+
+    def as_row(self) -> dict[str, object]:
+        row = {name: getattr(self, name) for name in self.__dataclass_fields__ if name != "coordination"}
+        return {**row, **self.coordination.as_columns()}
+
+
+SUMMARY_FIELDS = (
+    *(name for name in PolicySummary.__dataclass_fields__ if name != "coordination"),
+    *COORDINATION_COLUMNS,
+)
+
+
+def _episode_row(policy_name: str, episode: EpisodeSummary) -> dict[str, object]:
+    row = {name: getattr(episode, name) for name in EpisodeSummary.__dataclass_fields__ if name != "coordination"}
+    return {"policy": policy_name, **row, **episode.coordination.as_columns()}
 
 
 def evaluation_seeds(config: ExperimentConfig, episodes: int) -> list[int]:
@@ -88,6 +108,7 @@ def summarize(policy_name: str, episodes: Sequence[EpisodeSummary]) -> PolicySum
         mean_delta_v_per_agent_mps=mean("mean_delta_v_per_agent_mps"),
         mean_minimum_separation_meters=mean("minimum_separation_meters"),
         minimum_separation_meters=min(episode.minimum_separation_meters for episode in episodes),
+        coordination=sum((episode.coordination for episode in episodes), CoordinationCounts()),
     )
 
 
@@ -139,7 +160,7 @@ def evaluate(
     summaries: list[PolicySummary] = []
     for policy in policies:
         results = evaluate_policy(policy, env, seeds)
-        episode_rows.extend({"policy": policy.name, **asdict(result)} for result in results)
+        episode_rows.extend(_episode_row(policy.name, result) for result in results)
         summaries.append(summarize(policy.name, results))
         if progress:
             summary = summaries[-1]
@@ -150,9 +171,5 @@ def evaluate(
             )
 
     _write_csv(output_directory / "episodes.csv", ("policy", *EPISODE_FIELDS), episode_rows)
-    _write_csv(
-        output_directory / "summary.csv",
-        tuple(PolicySummary.__dataclass_fields__),
-        [asdict(summary) for summary in summaries],
-    )
+    _write_csv(output_directory / "summary.csv", SUMMARY_FIELDS, [summary.as_row() for summary in summaries])
     return summaries

@@ -21,6 +21,7 @@ from orbitzoo.thesis.calibration.config import CalibrationConfig
 from orbitzoo.thesis.calibration.models import CatalogObject, ObjectType
 from orbitzoo.thesis.config import ExperimentConfig
 from orbitzoo.thesis.environments.observations import NEIGHBOR_FEATURE_DIM, OWN_FEATURE_DIM
+from orbitzoo.thesis.evaluation.coordination import COORDINATION_COLUMNS, CoordinationCounts
 from orbitzoo.thesis.evaluation.evaluator import build_policy
 from orbitzoo.thesis.evaluation.policies import EvaluationPolicy, NoOpPolicy
 from orbitzoo.thesis.runtime import environment_info
@@ -57,6 +58,7 @@ RESULT_FIELDS = (
     "observation_microseconds_per_agent_decision",
     "policy_microseconds_per_agent_decision",
     "process_peak_rss_mb",
+    *COORDINATION_COLUMNS,
 )
 EVENT_FIELDS = (
     "sweep",
@@ -127,12 +129,33 @@ def build_scenarios(config: ScalabilityConfig, objects: Sequence[CatalogObject],
     return scenarios
 
 
+def pair_coordination(
+    reference: SimulationResult,
+    result: SimulationResult,
+    recurs: list[bool],
+    is_agent: np.ndarray,
+    window_seconds: float,
+) -> CoordinationCounts:
+    """Classify each reference agent-agent conjunction by how many members burned in the window before it."""
+    counts = CoordinationCounts()
+    for event, recurred in zip(reference.events, recurs):
+        if not (is_agent[event.first_index] and is_agent[event.second_index]):
+            continue
+        in_window = (result.burn_times_seconds >= event.tca_seconds - window_seconds) & (
+            result.burn_times_seconds <= event.tca_seconds
+        )
+        burned = set(result.burn_indices[in_window].tolist())
+        counts = counts.add(len(burned & {event.first_index, event.second_index}), not recurred)
+    return counts
+
+
 def _result_row(
     scenario: Scenario,
     policy_name: str,
     result: SimulationResult,
     resolved: int | str,
     secondary: int | str,
+    coordination: CoordinationCounts | None,
 ) -> dict[str, object]:
     agent_decisions = max(result.decisions * scenario.agent_indices.size, 1)
     misses = [event.miss_distance_meters for event in result.events]
@@ -159,6 +182,7 @@ def _result_row(
         "observation_microseconds_per_agent_decision": 1e6 * result.stage_seconds["observation"] / agent_decisions,
         "policy_microseconds_per_agent_decision": 1e6 * result.stage_seconds["policy"] / agent_decisions,
         "process_peak_rss_mb": _peak_rss_mb(),
+        **(coordination.as_columns() if coordination else dict.fromkeys(COORDINATION_COLUMNS, "")),
     }
 
 
@@ -254,16 +278,21 @@ def run_scalability(
     for scenario in scenarios:
         trajectory = SGP4Trajectory(scenario.objects, start_epoch)
         radii = np.asarray([item.radius_meters for item in scenario.objects])
+        is_agent = np.zeros(len(scenario.objects), dtype=bool)
+        is_agent[scenario.agent_indices] = True
         reference: SimulationResult | None = None
         for policy in policies:
             result = simulate(trajectory, radii, scenario.agent_indices, policy, settings)
             if reference is None:
-                reference, resolved, secondary = result, "", []
+                reference, resolved, secondary, coordination = result, "", [], None
                 secondary_count: int | str = ""
             else:
-                kept, secondary = match_events(reference.events, result.events, config.match_tolerance_seconds)
-                resolved, secondary_count = len(reference.events) - kept, len(secondary)
-            result_rows.append(_result_row(scenario, policy.name, result, resolved, secondary_count))
+                recurs, secondary = match_events(reference.events, result.events, config.match_tolerance_seconds)
+                resolved, secondary_count = recurs.count(False), len(secondary)
+                coordination = pair_coordination(
+                    reference, result, recurs, is_agent, experiment.safety.screening_horizon_seconds
+                )
+            result_rows.append(_result_row(scenario, policy.name, result, resolved, secondary_count, coordination))
             event_rows.extend(_event_rows(scenario, policy.name, result, secondary))
             _write_csv(output_directory / "results.csv", RESULT_FIELDS, result_rows)
             _write_csv(output_directory / "events.csv", EVENT_FIELDS, event_rows)

@@ -67,6 +67,20 @@ Key `results.csv` columns:
 Events match across policies when they involve the same pair within
 `match_tolerance_seconds`.
 
+## Implicit coordination
+
+Satellites never coordinate explicitly: there is no priority rule and no
+communication. Any coordination must emerge from each satellite acting on its own
+local observation. To measure it, every satellite-to-satellite conjunction is
+classified by how many of its two satellites maneuvered (`none`, `one`, `both`) and
+whether it was resolved. Columns `pair_<group>_maneuvered` count conjunctions and
+`pair_<group>_resolved` count those resolved.
+
+In `oz scale`, the conjunctions classified are the no-op run's agent-agent
+events. A member counts as maneuvering if it burned within the screening horizon
+before the event's time of closest approach; the event is resolved if it no longer
+occurs under the policy.
+
 ## Limitations
 
 - Maneuvers are impulsive, and the Clohessy–Wiltshire offset is linear around

@@ -87,6 +87,8 @@ class SimulationResult:
     decisions: int
     wall_seconds: float
     stage_seconds: dict[str, float] = field(default_factory=dict)
+    burn_indices: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=np.intp))
+    burn_times_seconds: np.ndarray = field(default_factory=lambda: np.empty(0))
 
 
 def _execute_maneuvers(
@@ -120,6 +122,8 @@ def simulate(
     masses = settings.dry_mass_kg + fuels
     delta_v = np.zeros(agent_count)
     maneuvers = rejected = 0
+    burn_indices: list[np.ndarray] = []
+    burn_times: list[np.ndarray] = []
     tracker = ConjunctionTracker(settings.safety.safe_separation_meters, radii, settings.merge_gap_seconds)
     fine = settings.fine_step_seconds
     search_radius = settings.safety.safe_separation_meters + settings.maximum_relative_speed_mps * fine / 2
@@ -170,6 +174,8 @@ def simulate(
         executed, propellant = _execute_maneuvers(actions, masses, fuels, settings.maneuver)
         burned = executed != ManeuverAction.NO_OP
         maneuvers += int(burned.sum())
+        burn_indices.append(agent_indices[burned])
+        burn_times.append(np.full(int(burned.sum()), float(start_time)))
         rejected += int(((actions != ManeuverAction.NO_OP) & ~burned).sum())
         exhaust_velocity = settings.maneuver.specific_impulse_seconds * STANDARD_GRAVITY_MPS2
         delta_v[burned] += exhaust_velocity * np.log(masses[burned] / (masses[burned] - propellant[burned]))
@@ -208,4 +214,6 @@ def simulate(
         decisions=decisions,
         wall_seconds=time.perf_counter() - started,
         stage_seconds=stage,
+        burn_indices=np.concatenate(burn_indices) if burn_indices else np.empty(0, dtype=np.intp),
+        burn_times_seconds=np.concatenate(burn_times) if burn_times else np.empty(0),
     )

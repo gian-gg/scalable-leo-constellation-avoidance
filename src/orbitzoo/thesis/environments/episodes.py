@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any, Callable
 
 import numpy as np
 import torch
 
 from orbitzoo.thesis.environments.collision_avoidance import CollisionAvoidanceEnv
+from orbitzoo.thesis.evaluation.coordination import CoordinationCounts
 
 ChooseActions = Callable[[np.ndarray, np.ndarray], np.ndarray]
 StepOutputs = tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]
@@ -28,6 +29,7 @@ class EpisodeSummary:
     rejected_actions: int
     mean_delta_v_per_agent_mps: float
     minimum_separation_meters: float
+    coordination: CoordinationCounts
 
 
 def reset_environment(env: CollisionAvoidanceEnv, seed: int) -> tuple[np.ndarray, np.ndarray]:
@@ -43,6 +45,15 @@ def _unsafe_agents(info: dict[str, Any], agent_names: set[str]) -> set[str]:
     return agent_names & {name for pair in info["unsafe_pairs"] for name in pair}
 
 
+def _unsafe_agent_pairs(assessments: list[dict[str, Any]], agent_names: set[str]) -> dict[frozenset[str], float]:
+    """Unsafe agent-agent pairs mapped to their predicted time to closest approach."""
+    return {
+        frozenset((item["first_name"], item["second_name"])): item["time_to_closest_approach_seconds"]
+        for item in assessments
+        if item["is_unsafe"] and {item["first_name"], item["second_name"]} <= agent_names
+    }
+
+
 def play_episode(
     env: CollisionAvoidanceEnv,
     seed: int,
@@ -54,6 +65,9 @@ def play_episode(
     agent_names = set(env.agent_names)
     total_reward = np.zeros(env.num_agents, dtype=np.float64)
     unsafe_agent_steps = rejected_actions = 0
+    unsafe_agent_pairs = _unsafe_agent_pairs([asdict(item) for item in env.unsafe_assessments()], agent_names)
+    pair_maneuvers: dict[frozenset[str], set[str]] = {}
+    last_unsafe_tca: dict[frozenset[str], float] = dict(unsafe_agent_pairs)
     while True:
         actions = np.asarray(choose_actions(local, global_state), dtype=np.int64)
         outputs = env.step(actions)
@@ -63,10 +77,21 @@ def play_episode(
         total_reward += rewards
         unsafe_agent_steps += len(_unsafe_agents(info, agent_names))
         rejected_actions += len(info["rejected_agents"])
+        burned = {name for name, maneuver in info["maneuvers"].items() if maneuver["action"] != 0}
+        for pair in unsafe_agent_pairs:
+            pair_maneuvers.setdefault(pair, set()).update(burned & pair)
+        unsafe_agent_pairs = _unsafe_agent_pairs(info["assessments"], agent_names)
+        last_unsafe_tca.update(unsafe_agent_pairs)
         local, global_state = next_local, next_global
         if dones.all():
             break
     delta_v = env.diagnostics.cumulative_delta_v_mps
+    collided = {frozenset(pair) for pair in info["collision_pairs"]}
+    coordination = CoordinationCounts()
+    for pair, tca in last_unsafe_tca.items():
+        # Cleared before the encounter, not simply flown past.
+        resolved = pair not in unsafe_agent_pairs and pair not in collided and tca > env.decision_interval_seconds
+        coordination = coordination.add(len(pair_maneuvers.get(pair, set())), resolved)
     return EpisodeSummary(
         seed=seed,
         mean_agent_return=float(total_reward.mean()),
@@ -77,4 +102,5 @@ def play_episode(
         rejected_actions=rejected_actions,
         mean_delta_v_per_agent_mps=float(np.mean(list(delta_v.values()))),
         minimum_separation_meters=env.diagnostics.minimum_separation_meters,
+        coordination=coordination,
     )
