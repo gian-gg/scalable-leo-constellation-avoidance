@@ -21,8 +21,9 @@ Each actor receives a fixed-width local observation. It begins with the
 satellite's normalized Cartesian position (3), velocity (3), and fuel fraction
 (1), followed by `k` threat-ranked neighbour blocks. Each neighbour block holds
 relative RSW position and velocity, time to closest approach, predicted miss
-distance, combined radius, maneuverability, fuel fraction, and a validity mask.
-Missing neighbours are zero-padded. The actor width is therefore `7 + 12k` and
+distance, combined radius, maneuverability, fuel fraction, a validity mask, and
+the predicted miss vector at closest approach.
+Missing neighbours are zero-padded. The actor width is therefore `7 + 15k` and
 does not depend on constellation size.
 
 The feature order for one neighbour block is:
@@ -37,6 +38,7 @@ The feature order for one neighbour block is:
 | maneuverable flag | 1 | binary |
 | fuel fraction | 1 | initial fuel |
 | valid mask | 1 | binary |
+| predicted miss vector (radial, along-track, cross-track) | 3 | safe separation, each clipped to ±10 |
 
 Candidate neighbours include both maneuvering satellites and debris. They are
 ranked deterministically by collision status, unsafe-conjunction status, predicted

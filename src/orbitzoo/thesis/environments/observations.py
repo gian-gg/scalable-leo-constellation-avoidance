@@ -19,7 +19,7 @@ VELOCITY_SCALE_MPS = 10_000.0
 MAX_NORMALIZED_MISS_DISTANCE = 10.0
 
 OWN_FEATURE_DIM = 7
-NEIGHBOR_FEATURE_DIM = 12
+NEIGHBOR_FEATURE_DIM = 15
 GLOBAL_BODY_FEATURE_DIM = 9
 
 
@@ -29,6 +29,15 @@ class ObservationState:
 
     local_observations: np.ndarray
     global_state: np.ndarray
+
+
+def normalized_miss_vector(miss_vector: np.ndarray, safe_separation_meters: float) -> np.ndarray:
+    """Miss vector components in units of the safe separation, clipped like the miss distance."""
+    return np.clip(
+        np.asarray(miss_vector, dtype=float) / safe_separation_meters,
+        -MAX_NORMALIZED_MISS_DISTANCE,
+        MAX_NORMALIZED_MISS_DISTANCE,
+    ).astype(np.float32)
 
 
 def fuel_fraction(body: Any, maneuverable_names: set[str]) -> float:
@@ -125,6 +134,7 @@ class LocalObservationEncoder:
             / self.safety_config.safe_separation_meters,
             MAX_NORMALIZED_MISS_DISTANCE,
         )
+        miss_vector = relative_position + relative_velocity * assessment.time_to_closest_approach_seconds
         return np.concatenate(
             (
                 relative_position.astype(np.float32) / POSITION_SCALE_METERS,
@@ -142,6 +152,7 @@ class LocalObservationEncoder:
                     ],
                     dtype=np.float32,
                 ),
+                normalized_miss_vector(miss_vector, self.safety_config.safe_separation_meters),
             )
         )
 

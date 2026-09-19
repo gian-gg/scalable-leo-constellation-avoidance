@@ -52,9 +52,9 @@ def test_local_width_is_fixed_and_missing_neighbors_are_masked() -> None:
     state = encoder.encode(bodies, ["agent"])
 
     assert state.local_observations.shape == (1, OWN_FEATURE_DIM + 3 * NEIGHBOR_FEATURE_DIM)
-    first_mask = OWN_FEATURE_DIM + NEIGHBOR_FEATURE_DIM - 1
+    first_mask = OWN_FEATURE_DIM + 11
     assert state.local_observations[0, first_mask] == 1.0
-    assert np.all(state.local_observations[0, first_mask + 1 :] == 0.0)
+    assert np.all(state.local_observations[0, OWN_FEATURE_DIM + NEIGHBOR_FEATURE_DIM :] == 0.0)
 
 
 def test_threat_ranking_beats_current_distance_and_uses_observer_rsw() -> None:
@@ -81,7 +81,7 @@ def test_neighbor_block_identifies_maneuverable_bodies_and_fuel() -> None:
     ]
 
     state = encoder.encode(bodies, ["agent_1", "agent_2"])
-    neighbor_tail = state.local_observations[0, -4:]
+    neighbor_tail = state.local_observations[0, OWN_FEATURE_DIM + 8 : OWN_FEATURE_DIM + 12]
 
     assert np.allclose(neighbor_tail, [0.002, 1.0, 0.75, 1.0])
 
@@ -136,3 +136,16 @@ def test_local_rows_do_not_depend_on_body_input_order() -> None:
     np.testing.assert_array_equal(forward.local_observations, reversed_bodies.local_observations)
     np.testing.assert_array_equal(forward.global_state, reversed_bodies.global_state)
     np.testing.assert_array_equal(forward.local_observations[::-1], swapped_agents.local_observations)
+
+
+def test_neighbor_block_ends_with_the_predicted_miss_direction() -> None:
+    config = SafetyConfig(safe_separation_meters=1_000.0, screening_horizon_seconds=1_800.0, threat_prediction="linear")
+    encoder = LocalObservationEncoder(neighborhood_size=1, safety_config=config)
+    bodies = [
+        body("agent", [7_000_000, 0, 0], [0, 7_500, 0], fuel=1, initial_fuel=1),
+        body("threat", [7_000_300, 5_000, 0], [0, 7_490, 0]),
+    ]
+
+    miss = encoder.encode(bodies, ["agent"]).local_observations[0, OWN_FEATURE_DIM + 12 : OWN_FEATURE_DIM + 15]
+
+    assert np.allclose(miss, [0.3, 0.0, 0.0], atol=1e-6)

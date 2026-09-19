@@ -16,6 +16,7 @@ from orbitzoo.thesis.environments.observations import (
     OWN_FEATURE_DIM,
     POSITION_SCALE_METERS,
     VELOCITY_SCALE_MPS,
+    normalized_miss_vector,
 )
 from orbitzoo.thesis.environments.prediction import predict_closest_approach
 from orbitzoo.thesis.environments.safety import SafetyConfig
@@ -159,6 +160,10 @@ def encode_local_observations(
                 block[9] = float(state.is_agent[neighbor])
                 block[10] = state.fuel_fractions[neighbor] if state.is_agent[neighbor] else 0.0
                 block[11] = 1.0
+                block[12:15] = normalized_miss_vector(
+                    basis @ (ranked.relative_positions[row, neighbor] + ranked.relative_velocities[row, neighbor] * ranked.tca[row, neighbor]),
+                    safe_separation,
+                )
                 chosen.append((ranked.start + row, slot, int(neighbor)))
     if safety.threat_prediction == "j2" and chosen:
         apply_curved_prediction(
@@ -199,3 +204,7 @@ def apply_curved_prediction(
     observations[rows, columns + 7] = np.minimum(
         approach.miss_distance_m / safety.safe_separation_meters, MAX_NORMALIZED_MISS_DISTANCE
     )
+    bases_at_approach = rsw_bases(approach.first_positions_m, approach.first_velocities_mps)
+    miss_rsw = np.einsum("aij,aj->ai", bases_at_approach, approach.miss_vectors_m)
+    for offset, component in enumerate(normalized_miss_vector(miss_rsw, safety.safe_separation_meters).T):
+        observations[rows, columns + 12 + offset] = component

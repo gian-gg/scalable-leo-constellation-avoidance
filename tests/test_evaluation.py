@@ -117,6 +117,9 @@ def test_curved_features_see_the_crossing_minutes_ahead() -> None:
 
     assert observation[0, OWN_FEATURE_DIM + 6] * SAFETY.screening_horizon_seconds == pytest.approx(600.0, abs=2.0)
     assert observation[0, OWN_FEATURE_DIM + 7] * SAFETY.safe_separation_meters == pytest.approx(300.0, abs=20.0)
+    direction = observation[0, OWN_FEATURE_DIM + 12 : OWN_FEATURE_DIM + 15] * SAFETY.safe_separation_meters
+    assert direction[0] == pytest.approx(300.0, abs=25.0)
+    assert np.linalg.norm(direction[1:]) < 25.0
 
 
 def test_rule_policy_choice_maximizes_the_predicted_miss() -> None:
