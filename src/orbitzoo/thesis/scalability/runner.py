@@ -22,6 +22,7 @@ from orbitzoo.thesis.calibration.models import CatalogObject, ObjectType
 from orbitzoo.thesis.config import ExperimentConfig
 from orbitzoo.thesis.environments.observations import NEIGHBOR_FEATURE_DIM, OWN_FEATURE_DIM
 from orbitzoo.thesis.evaluation.coordination import COORDINATION_COLUMNS, CoordinationCounts
+from orbitzoo.thesis.evaluation.drift import return_delta_v
 from orbitzoo.thesis.evaluation.evaluator import build_policy
 from orbitzoo.thesis.evaluation.policies import EvaluationPolicy, NoOpPolicy
 from orbitzoo.thesis.runtime import environment_info
@@ -58,6 +59,9 @@ RESULT_FIELDS = (
     "observation_microseconds_per_agent_decision",
     "policy_microseconds_per_agent_decision",
     "process_peak_rss_mb",
+    "mean_slot_offset_m",
+    "max_slot_offset_m",
+    "mean_return_delta_v_mps",
     *COORDINATION_COLUMNS,
 )
 EVENT_FIELDS = (
@@ -158,6 +162,16 @@ def _result_row(
     coordination: CoordinationCounts | None,
 ) -> dict[str, object]:
     agent_decisions = max(result.decisions * scenario.agent_indices.size, 1)
+    deviation = result.slot_deviation
+    drift = (
+        {
+            "mean_slot_offset_m": float(deviation.distances_m.mean()),
+            "max_slot_offset_m": float(deviation.distances_m.max()),
+            "mean_return_delta_v_mps": float(return_delta_v(deviation).mean()),
+        }
+        if deviation is not None and deviation.mean_motion.size
+        else dict.fromkeys(("mean_slot_offset_m", "max_slot_offset_m", "mean_return_delta_v_mps"), "")
+    )
     misses = [event.miss_distance_meters for event in result.events]
     return {
         "sweep": scenario.sweep,
@@ -182,6 +196,7 @@ def _result_row(
         "observation_microseconds_per_agent_decision": 1e6 * result.stage_seconds["observation"] / agent_decisions,
         "policy_microseconds_per_agent_decision": 1e6 * result.stage_seconds["policy"] / agent_decisions,
         "process_peak_rss_mb": _peak_rss_mb(),
+        **drift,
         **(coordination.as_columns() if coordination else dict.fromkeys(COORDINATION_COLUMNS, "")),
     }
 

@@ -15,6 +15,10 @@ local k-neighbor observation -> shared actor -> one maneuver per satellite
 full training-only constellation state -> centralized critic -> learning signal
 ```
 
+The policy decides when and how to avoid a conjunction. Returning to the nominal
+orbit afterwards is out of scope and left to standard station-keeping; the drift
+avoidance causes, and the delta-v a return would cost, are measured in evaluation.
+
 The actor will use seven actions: no-op, prograde, retrograde, radial-out,
 radial-in, cross-track positive, and cross-track negative. The critic is used
 only while training; the deployed/evaluated policy uses the shared actor and

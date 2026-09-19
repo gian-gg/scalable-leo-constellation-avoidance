@@ -10,6 +10,7 @@ import torch
 
 from orbitzoo.thesis.environments.collision_avoidance import CollisionAvoidanceEnv
 from orbitzoo.thesis.evaluation.coordination import CoordinationCounts
+from orbitzoo.thesis.evaluation.drift import return_delta_v
 
 ChooseActions = Callable[[np.ndarray, np.ndarray], np.ndarray]
 StepOutputs = tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]
@@ -30,6 +31,9 @@ class EpisodeSummary:
     mean_delta_v_per_agent_mps: float
     minimum_separation_meters: float
     coordination: CoordinationCounts
+    mean_slot_offset_m: float | None = None
+    max_slot_offset_m: float | None = None
+    mean_return_delta_v_mps: float | None = None
 
 
 def reset_environment(env: CollisionAvoidanceEnv, seed: int) -> tuple[np.ndarray, np.ndarray]:
@@ -59,6 +63,7 @@ def play_episode(
     seed: int,
     choose_actions: ChooseActions,
     observe_step: ObserveStep | None = None,
+    measure_drift: bool = False,
 ) -> EpisodeSummary:
     """Run until termination; ``observe_step`` sees each pre-step state, actions, and outputs."""
     local, global_state = reset_environment(env, seed)
@@ -92,6 +97,14 @@ def play_episode(
         # Cleared before the encounter, not simply flown past.
         resolved = pair not in unsafe_agent_pairs and pair not in collided and tca > env.decision_interval_seconds
         coordination = coordination.add(len(pair_maneuvers.get(pair, set())), resolved)
+    drift: dict[str, float] = {}
+    if measure_drift:
+        deviation = env.slot_deviation()
+        drift = {
+            "mean_slot_offset_m": float(deviation.distances_m.mean()),
+            "max_slot_offset_m": float(deviation.distances_m.max()),
+            "mean_return_delta_v_mps": float(return_delta_v(deviation).mean()),
+        }
     return EpisodeSummary(
         seed=seed,
         mean_agent_return=float(total_reward.mean()),
@@ -103,4 +116,5 @@ def play_episode(
         mean_delta_v_per_agent_mps=float(np.mean(list(delta_v.values()))),
         minimum_separation_meters=env.diagnostics.minimum_separation_meters,
         coordination=coordination,
+        **drift,
     )

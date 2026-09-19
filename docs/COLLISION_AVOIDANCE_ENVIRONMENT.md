@@ -125,6 +125,10 @@ close approach costs 5, and a collision costs 100, so safety dominates fuel and
 collisions dominate near misses. The weights still require sensitivity analysis
 before thesis results are reported.
 
+`env.slot_deviation()` compares each agent with a copy of its initial state
+propagated without maneuvers, under the same gravity model, and returns its offset
+from that nominal slot.
+
 `info` records safety assessments, realized close approaches, maneuver accounting,
 rejected actions, and the termination reason. `env.diagnostics` accumulates
 per-satellite delta-v and fuel use, minimum separation, and collision pairs over

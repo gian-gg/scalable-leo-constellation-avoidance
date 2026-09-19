@@ -327,3 +327,13 @@ def test_top_neighbors_match_the_encoded_first_neighbour() -> None:
     for row, agent in enumerate(agents):
         basis = rsw_bases(positions[[agent]], velocities[[agent]])[0]
         np.testing.assert_allclose(encoded[row, 7:10], (basis @ relative[row]).astype(np.float32) / 10_000_000.0)
+
+
+def test_maneuvering_agents_report_their_final_slot_offset() -> None:
+    policy = ClohessyWiltshireAvoidancePolicy(LARGE_MANEUVER, SAFETY)
+
+    coasting = simulate(crossing_scene(), np.ones(3), np.array([0]), NoOpPolicy(), settings())
+    avoiding = simulate(crossing_scene(), np.ones(3), np.array([0]), policy, settings())
+
+    assert coasting.slot_deviation.distances_m[0] == 0.0
+    assert avoiding.slot_deviation.distances_m[0] > 100.0

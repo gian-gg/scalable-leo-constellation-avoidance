@@ -206,3 +206,17 @@ def test_environment_observations_match_the_reference_encoder() -> None:
 
     np.testing.assert_array_equal(local, reference.local_observations)
     np.testing.assert_array_equal(global_state, reference.global_state)
+
+
+def test_slot_deviation_is_zero_when_coasting_and_grows_after_a_burn() -> None:
+    env = make_env()
+    env.step(actions(ManeuverAction.PROGRADE))
+    for _ in range(9):
+        env.step(actions())
+
+    deviation = env.slot_deviation()
+
+    agent = env.agent_names.index(spacecraft(env).name)
+    coasting = [index for index in range(NUM_AGENTS) if index != agent]
+    assert deviation.distances_m[coasting].max() < 5.0
+    assert deviation.distances_m[agent] > 1_000.0

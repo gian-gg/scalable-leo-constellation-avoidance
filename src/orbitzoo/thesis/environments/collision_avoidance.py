@@ -19,6 +19,7 @@ from orbitzoo.thesis.environments.observations import LocalObservationEncoder, f
 from orbitzoo.thesis.environments.rewards import RewardConfig, calculate_rewards
 from orbitzoo.thesis.environments.safety import PairSafetyAssessment, SafetyConfig, SafetySnapshot, safety_snapshot
 from orbitzoo.thesis.environments.vectorized_observations import CatalogState, encode_local_observations
+from orbitzoo.thesis.evaluation.drift import SlotDeviation, slot_deviation
 from orbitzoo.thesis.maneuvers.actions import ManeuverAction
 from orbitzoo.thesis.maneuvers.contract import (
     ManeuverCommand,
@@ -75,6 +76,9 @@ class CollisionAvoidanceEnv(OrbitZoo):
         without_covariance = {
             group: [{**body, "covariance": False} for body in orbitzoo_kwargs.get(group, [])]
             for group in ("spacecrafts", "drifters")
+        }
+        self._spacecraft_forces = {
+            body["name"]: tuple(body.get("forces", ["gravity_newton"])) for body in orbitzoo_kwargs.get("spacecrafts", [])
         }
         super().__init__(**{**orbitzoo_kwargs, **without_covariance})
 
@@ -148,7 +152,29 @@ class CollisionAvoidanceEnv(OrbitZoo):
         self.diagnostics = EpisodeDiagnostics(self.agent_names)
         self._last_snapshot = self._snapshot()
         self.diagnostics.record_minimum_separation(self._last_snapshot.minimum_separation())
+        spacecraft = self._spacecraft_by_name()
+        self._reset_date = self.dynamics.current_epoch
+        self._initial_states = {
+            name: (spacecraft[name].position.copy(), spacecraft[name].velocity.copy()) for name in self.agent_names
+        }
         return self._state()
+
+    def slot_deviation(self) -> SlotDeviation:
+        """Each agent's offset from where it would be had it never maneuvered, in ``agent_names`` order."""
+        from orbitzoo.thesis.scenarios.propagation import propagate_from
+
+        elapsed = self.dynamics.current_epoch.durationFrom(self._reset_date)
+        spacecraft = self._spacecraft_by_name()
+        nominal = [
+            propagate_from(*self._initial_states[name], self._reset_date, elapsed, self._spacecraft_forces[name])
+            for name in self.agent_names
+        ]
+        return slot_deviation(
+            np.array([spacecraft[name].position for name in self.agent_names]),
+            np.array([spacecraft[name].velocity for name in self.agent_names]),
+            np.array([state[0] for state in nominal]),
+            np.array([state[1] for state in nominal]),
+        )
 
     def _commands_for_actions(
         self, action_ids: np.ndarray

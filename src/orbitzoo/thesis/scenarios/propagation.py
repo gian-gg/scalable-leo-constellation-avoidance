@@ -50,9 +50,20 @@ def teme_to_inertial(positions: np.ndarray, velocities: np.ndarray, epoch: datet
     )
 
 
-def propagate(position: np.ndarray, velocity: np.ndarray, epoch: datetime, seconds: float) -> tuple[np.ndarray, np.ndarray]:
-    """Propagate a coasting state by ``seconds`` (negative for backwards) with the environment's J2 model."""
-    date = absolute_date(epoch)
+SUPPORTED_FORCES = ("gravity_newton", "gravity_hf")
+
+
+def propagate_from(
+    position: np.ndarray,
+    velocity: np.ndarray,
+    date: AbsoluteDate,
+    seconds: float,
+    forces: tuple[str, ...] = ("gravity_hf",),
+) -> tuple[np.ndarray, np.ndarray]:
+    """Propagate a coasting state by ``seconds`` (negative for backwards) with the environment's gravity model."""
+    unsupported = set(forces) - set(SUPPORTED_FORCES)
+    if unsupported:
+        raise ValueError(f"unsupported forces {sorted(unsupported)}; supported: {SUPPORTED_FORCES}")
     orbit = CartesianOrbit(
         PVCoordinates(Vector3D(*map(float, position)), Vector3D(*map(float, velocity))), INERTIAL_FRAME, date, MU
     )
@@ -62,10 +73,22 @@ def propagate(position: np.ndarray, velocity: np.ndarray, epoch: datetime, secon
     propagator = NumericalPropagator(integrator)
     propagator.setOrbitType(OrbitType.CARTESIAN)
     propagator.setMu(MU)
-    propagator.addForceModel(_gravity)
+    if "gravity_hf" in forces:
+        propagator.addForceModel(_gravity)
     propagator.setInitialState(SpacecraftState(orbit))
     pv = propagator.propagate(date.shiftedBy(float(seconds))).getPVCoordinates()
     return (
         np.array([pv.getPosition().getX(), pv.getPosition().getY(), pv.getPosition().getZ()]),
         np.array([pv.getVelocity().getX(), pv.getVelocity().getY(), pv.getVelocity().getZ()]),
     )
+
+
+def propagate(
+    position: np.ndarray,
+    velocity: np.ndarray,
+    epoch: datetime,
+    seconds: float,
+    forces: tuple[str, ...] = ("gravity_hf",),
+) -> tuple[np.ndarray, np.ndarray]:
+    """``propagate_from`` with a UTC datetime."""
+    return propagate_from(position, velocity, absolute_date(epoch), seconds, forces)

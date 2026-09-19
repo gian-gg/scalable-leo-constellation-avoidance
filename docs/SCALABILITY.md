@@ -63,6 +63,8 @@ Key `results.csv` columns:
 | `<stage>_seconds_per_decision` | Propagation, observation, policy, maneuver, and screening time |
 | `observation_microseconds_per_agent_decision` | Per-agent observation cost; flat in agent count, linear in catalog size |
 | `process_peak_rss_mb` | Process peak memory so far |
+| `mean_slot_offset_m`, `max_slot_offset_m` | Agents' final offset from their SGP4 track (the Clohessy–Wiltshire offset) |
+| `mean_return_delta_v_mps` | Calculated two-burn delta-v to return to the track; see [EVALUATION.md](EVALUATION.md#drift-from-the-nominal-slot) |
 
 Events match across policies when they involve the same pair within
 `match_tolerance_seconds`.

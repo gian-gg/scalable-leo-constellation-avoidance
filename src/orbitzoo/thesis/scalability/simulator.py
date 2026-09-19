@@ -16,6 +16,7 @@ from sgp4.api import SatrecArray
 from orbitzoo.thesis.calibration.models import CatalogObject
 from orbitzoo.thesis.calibration.propagation import METERS_PER_KILOMETER, _julian_date, _raise_first_error, _satellite
 from orbitzoo.thesis.environments.safety import SafetyConfig
+from orbitzoo.thesis.evaluation.drift import SlotDeviation
 from orbitzoo.thesis.evaluation.policies import EvaluationPolicy
 from orbitzoo.thesis.maneuvers.actions import ManeuverAction
 from orbitzoo.thesis.maneuvers.contract import STANDARD_GRAVITY_MPS2, ManeuverConfig
@@ -89,6 +90,7 @@ class SimulationResult:
     stage_seconds: dict[str, float] = field(default_factory=dict)
     burn_indices: np.ndarray = field(default_factory=lambda: np.empty(0, dtype=np.intp))
     burn_times_seconds: np.ndarray = field(default_factory=lambda: np.empty(0))
+    slot_deviation: SlotDeviation | None = None
 
 
 def _execute_maneuvers(
@@ -216,4 +218,5 @@ def simulate(
         stage_seconds=stage,
         burn_indices=np.concatenate(burn_indices) if burn_indices else np.empty(0, dtype=np.intp),
         burn_times_seconds=np.concatenate(burn_times) if burn_times else np.empty(0),
+        slot_deviation=SlotDeviation(offsets.offsets, offsets.rates, motion) if decisions else None,
     )

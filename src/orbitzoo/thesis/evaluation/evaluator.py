@@ -48,6 +48,9 @@ class PolicySummary:
     mean_delta_v_per_agent_mps: float
     mean_minimum_separation_meters: float
     minimum_separation_meters: float
+    mean_slot_offset_m: float
+    max_slot_offset_m: float
+    mean_return_delta_v_mps: float
     coordination: CoordinationCounts
 
     def as_row(self) -> dict[str, object]:
@@ -108,13 +111,19 @@ def summarize(policy_name: str, episodes: Sequence[EpisodeSummary]) -> PolicySum
         mean_delta_v_per_agent_mps=mean("mean_delta_v_per_agent_mps"),
         mean_minimum_separation_meters=mean("minimum_separation_meters"),
         minimum_separation_meters=min(episode.minimum_separation_meters for episode in episodes),
+        mean_slot_offset_m=mean("mean_slot_offset_m"),
+        max_slot_offset_m=max(episode.max_slot_offset_m for episode in episodes),
+        mean_return_delta_v_mps=mean("mean_return_delta_v_mps"),
         coordination=sum((episode.coordination for episode in episodes), CoordinationCounts()),
     )
 
 
 def evaluate_policy(policy: EvaluationPolicy, source: EpisodeSource, seeds: Sequence[int]) -> list[EpisodeSummary]:
     """Play every seed with actions chosen from local observations alone."""
-    return [play_episode(source.environment(seed), seed, lambda local, _: policy.choose(local)) for seed in seeds]
+    return [
+        play_episode(source.environment(seed), seed, lambda local, _: policy.choose(local), measure_drift=True)
+        for seed in seeds
+    ]
 
 
 def held_out(config: ExperimentConfig) -> ExperimentConfig:

@@ -55,7 +55,23 @@ the same seeds.
 `summary.csv` columns: `collision_rate`, `mean_return`, `mean_unsafe_agent_steps`,
 `mean_final_unsafe_agents` (agents still in an unsafe conjunction when the episode
 ended), `mean_rejected_actions`, `mean_delta_v_per_agent_mps`,
-`mean_minimum_separation_meters`, and `minimum_separation_meters` (worst episode).
+`mean_minimum_separation_meters`, `minimum_separation_meters` (worst episode), and the drift columns below.
+
+## Drift from the nominal slot
+
+Returning to the assigned orbit is out of scope: the policy decides when and how to
+avoid, and restoring the orbit is left to standard station-keeping. The drift that
+avoidance causes is measured instead:
+
+- `mean_slot_offset_m` and `max_slot_offset_m`: each agent's distance at the end of
+  the episode from where it would be had it never maneuvered.
+- `mean_return_delta_v_mps`: the smallest two-burn delta-v that would bring it back,
+  computed with the Clohessy–Wiltshire equations over a coast of up to one orbit and
+  a transfer of up to two orbits. It is calculated, never flown.
+
+For reference, one 0.5 m/s burn followed by 50 minutes of coasting leaves about
+5 km of drift and a return cost of about 1.05 m/s (prograde), 0.26 m/s (radial),
+or 0.5 m/s (cross-track).
 
 ## Implicit coordination
 
