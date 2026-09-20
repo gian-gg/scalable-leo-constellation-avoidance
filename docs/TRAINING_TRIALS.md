@@ -152,6 +152,46 @@ deeper-skewed remainder rather than worse behaviour.
 Training diagnostics also improved: minimum separation during training rose to
 2,093 m from 1,380 m, at unchanged unsafe-step counts and with entropy at 0.171.
 
+## Trial 9 — shorter warning times in the training mix, stages 1-2
+
+Threats first flagged 5-10 minutes ahead were the one category where the rule still
+beat the actor (81% against 79%). Conjunctions were generated to occur 480-990 s
+into an episode, so short-notice encounters were rare in training. The floor moved
+to 360 s.
+
+Held-out episodes are generated from the same configuration as training, so widening
+the mix would also move the test set. `configs/eval_stage{1,2,3}.json` were frozen
+at the previous generator settings and are now the evaluation configurations; the
+rule reproduced 794/880 on them, which confirms the benchmark did not move.
+
+| Cleared, by warning time at first flag | Rule | Trial 8 | Trial 9 |
+| --- | ---: | ---: | ---: |
+| 5-10 min | 81% | 79% | **83%** |
+| Over 10 min | 93% | 96% | **97%** |
+| Overall | 90% | 93% | **95%** |
+
+| Metric, 64 agents | Rule | Trial 8 | Trial 9 |
+| --- | ---: | ---: | ---: |
+| Close approaches | 4.30 | 3.10 | **2.40** |
+| Closest (m) | 289.1 | 420.0 | 420.0 |
+| Mean shortfall | 0.169 | 0.158 | **0.131** |
+| Delta-v (m/s) | **0.676** | 0.965 | 1.119 |
+| Slot drift (m) | **3,681** | 4,326 | 5,938 |
+| Delta-v including return (m/s) | **1.401** | 1.708 | 2.264 |
+
+Close approaches fall 44% below the rule, and the short-warning gap closes without
+costing anything in the long-warning band. Paired across the same 20 episodes the
+improvement over trial 8 is -0.70 per episode (p = 0.003), better in 12 episodes and
+worse in 2.
+
+The cost is fuel. Delta-v is 65% above the rule and drift 61% above it, and the
+total including the return burn is 2.264 against 1.401. Trial 6 was cheaper than the
+rule overall because low drift offset a higher avoidance burn; that advantage is
+gone. Reducing delta-v is the next task, on a policy trained through stage 3.
+
+On the widened training distribution itself, where conjunctions are harder, the rule
+falls to 83% while the actor holds 87%.
+
 ## Decision
 
 The stage configurations (`configs/mappo_stage{1,2,3}.json`) adopt variant B:
@@ -166,9 +206,34 @@ The stage configurations (`configs/mappo_stage{1,2,3}.json`) adopt variant B:
 | `training.actor_learning_rate` | 1e-4 |
 | `rewards.close_approach_flat_penalty` | −10 (trial 6) |
 
+Trials 7 to 9 changed three further things, each validated through stage 2 against
+the frozen benchmark:
+
+| Change | Trial | Effect at 64 agents |
+| --- | --- | --- |
+| Miss direction as a unit vector | 7 | same-direction pair burns 18 to 0 |
+| Shaping previews the flat penalty | 8 | close approaches 4.10 to 3.10 |
+| Meeting-time floor 480 s to 360 s | 9 | close approaches 3.10 to 2.40 |
+
+Against the rule's 4.30 close approaches per episode, the actor now reaches 2.40,
+at 65% more delta-v.
+
 With these weights a 500 m close approach costs 15 and one 0.5 m/s burn costs 0.5,
 so a successful avoidance clearly outweighs its fuel, while a collision still costs
 more than any near miss.
+
+## Trial artifacts
+
+Stage-2 checkpoints for trials 7 to 9, all evaluated with
+`oz evaluate --config configs/eval_stage2.json --episodes 20`:
+
+| Trial | Run directory | Checkpoint SHA-256 (first 16) |
+| --- | --- | --- |
+| 7 | `runs/sym_stage2` | `20746aa083c027a5` |
+| 8 | `runs/pot_stage2` | `f36a372c06214852` |
+| 9 | `runs/lead_stage2` | `09f67424d3c57859` |
+
+Diagnostics are in `runs/trials/1{1,2,4}_*.json`. Code revision `5ec089b`; seed 42.
 
 ## Limitations
 
@@ -179,3 +244,9 @@ more than any near miss.
 - Stage-1 performance plateaued at 72–77% in trials 3–6; the gap to the rule closed
   only after stages 2 and 3, so stage-1 trials are a poor predictor of final quality.
   See [TRAINING_RESULTS.md](TRAINING_RESULTS.md).
+- Trials 7 to 9 stop at stage 2, so none of their numbers describe a 150-agent
+  policy. They were run to choose settings, not to report results.
+- Episode returns are not comparable across trials 7 to 9: trial 8 changed the
+  reward function, which shifts the return scale independently of behaviour.
+- Every trial is one training run. The paired tests quoted measure variation
+  between episodes, not between training seeds.
