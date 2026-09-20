@@ -131,7 +131,9 @@ separation, one at contact. A close approach during the step is found by tracing
 each pair's linear relative motion back over the step from its post-step state.
 
 The potential Φ is minus the shortfall of the satellite's worst still-approaching
-predicted miss, read from its own observation (zero after a collision). The shaping term rewards each step that
+predicted miss, read from its own observation (zero after a collision). A threat predicted inside the safe
+separation also carries the flat penalty's share of the potential, so the shaping previews both realized
+penalties instead of only the shortfall. The shaping term rewards each step that
 widens the predicted miss and penalises each step that narrows it, so progress is
 visible long before the encounter. Because it is potential-based and
 `shaping_discount` must equal the training discount, it does not change which

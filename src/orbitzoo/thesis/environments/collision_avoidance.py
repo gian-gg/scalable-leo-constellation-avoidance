@@ -211,7 +211,7 @@ class CollisionAvoidanceEnv(OrbitZoo):
         if np.any(actions < int(ManeuverAction.NO_OP)) or np.any(actions > int(ManeuverAction.CROSS_TRACK_NEGATIVE)):
             raise ValueError("action IDs must be integers in [0, 6]")
 
-        potentials_before = threat_potentials(self._last_local, self.safety_config.safe_separation_meters)
+        potentials_before = threat_potentials(self._last_local, self.safety_config.safe_separation_meters, self.reward_config)
         commands, rejected_agents = self._commands_for_actions(actions)
         thrusts, durations = orbitzoo_action_inputs(commands)
         spacecraft_before = self._spacecraft_by_name()
@@ -241,7 +241,7 @@ class CollisionAvoidanceEnv(OrbitZoo):
             self.agent_names,
             results,
             potentials_before,
-            threat_potentials(local_observations, self.safety_config.safe_separation_meters),
+            threat_potentials(local_observations, self.safety_config.safe_separation_meters, self.reward_config),
             {name for pair in collision_pairs for name in pair},
             close_approaches,
             self.safety_config.safe_separation_meters,

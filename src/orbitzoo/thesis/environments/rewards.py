@@ -46,12 +46,23 @@ def shortfall(miss_distance_meters: float, safe_separation_meters: float) -> flo
     return max(0.0, 1.0 - miss_distance_meters / safe_separation_meters)
 
 
-def threat_potentials(local_observations: np.ndarray, safe_separation_meters: float) -> np.ndarray:
-    """Minus the shortfall of each agent's worst still-approaching threat, read from its own observation."""
+def threat_potentials(
+    local_observations: np.ndarray,
+    safe_separation_meters: float,
+    config: RewardConfig | None = None,
+) -> np.ndarray:
+    """Minus the predicted cost of each agent's worst still-approaching threat, from its own observation.
+
+    The potential previews both realized penalties, so a threat predicted just inside the safe
+    separation is already worth the flat penalty rather than its near-zero shortfall.
+    """
+    config = config or RewardConfig()
     blocks = local_observations[:, OWN_FEATURE_DIM:].reshape(len(local_observations), -1, NEIGHBOR_FEATURE_DIM)
     approaching = (blocks[:, :, 11] > 0.5) & (blocks[:, :, 6] > 0)
     misses = np.where(approaching, blocks[:, :, 7] * safe_separation_meters, np.inf).min(axis=1)
-    return -np.clip(1.0 - misses / safe_separation_meters, 0.0, 1.0)
+    shortfalls = np.clip(1.0 - misses / safe_separation_meters, 0.0, 1.0)
+    flat_fraction = config.close_approach_flat_penalty / config.close_approach_penalty
+    return -(shortfalls + flat_fraction * (misses < safe_separation_meters))
 
 
 def calculate_rewards(

@@ -108,6 +108,50 @@ The regression is 19 pair encounters where neither satellite burned, at a median
 planned miss of 968 m. These are the mild conjunctions of trial 5 returning, and
 they are the target of the next reward change rather than of this feature.
 
+## Trial 8 — shaping that previews the flat penalty, stages 1-2
+
+Trial 7 left 19 pair encounters where neither satellite burned, all with a planned
+miss between 900 m and 995 m. They were not a perception failure: every one was
+flagged, a median of 9.6 minutes ahead.
+
+The cause was a mismatch between the two safety signals. A realized 968 m approach
+costs the flat penalty plus its shortfall, about -10.96, while the shaping potential
+valued clearing the same threat at 30 x 0.032, about +0.96. The dense signal the
+actor learns from understated the sparse cost tenfold, so coasting was rational.
+
+The potential now previews both penalties: a threat predicted inside the safe
+separation carries the flat term as well as its shortfall. The flat fraction is
+`close_approach_flat_penalty / close_approach_penalty`, so no new weight is
+introduced, and when the shaping weight equals the penalty scale the preview equals
+the cost avoided exactly.
+
+| Pair outcome (240 encounters) | Trial 6 | Trial 7 | Trial 8 |
+| --- | ---: | ---: | ---: |
+| Same direction | 18 (11% cleared) | 0 | 0 |
+| Neither burned | 1 | 19 (0% cleared) | **0** |
+| Opposite | 418 (99.8%) | 185 (95%) | 210 (99%) |
+| One satellite only | 56 | 36 (100%) | 30 (100%) |
+| Mild pairs (>= 900 m) | 48/49 | 32/49 | **49/49** |
+
+| Metric, 64 agents | Rule | Trial 7 | Trial 8 |
+| --- | ---: | ---: | ---: |
+| Close approaches | 4.30 | 4.10 | **3.10** |
+| Closest (m) | 289.1 | 420.0 | 420.0 |
+| Mean shortfall | 0.169 | 0.128 | 0.158 |
+| Delta-v (m/s) | 0.676 | 0.815 | 0.965 |
+| Slot drift (m) | 3,681 | 3,860 | 4,326 |
+| Satellite pairs cleared | 99% | 88% | 99% |
+| Double threats cleared | 80% | 89% | 89% |
+
+Close approaches fall 28% below the rule, the first clear win rather than a match.
+Pairs return to the rule's level while double threats stay ahead of it. The cost is
+fuel: delta-v rises 43% above the rule and drift with it. Mean shortfall rises
+slightly because the encounters now prevented were the shallow ones, which leaves a
+deeper-skewed remainder rather than worse behaviour.
+
+Training diagnostics also improved: minimum separation during training rose to
+2,093 m from 1,380 m, at unchanged unsafe-step counts and with entropy at 0.171.
+
 ## Decision
 
 The stage configurations (`configs/mappo_stage{1,2,3}.json`) adopt variant B:

@@ -45,7 +45,7 @@
     "maximum_attempts": 20,
     "maximum_tle_age_days": 14.0,
     "meeting_time_seconds": [
-      480.0,
+      360.0,
       990.0
     ],
     "metadata_path": "data/full/objects.csv",

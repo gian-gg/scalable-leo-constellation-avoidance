@@ -43,6 +43,22 @@ Evaluation seeds start at `seed + 1,000,000`, disjoint from the training seeds
 (`seed + episode index`). All policies play the same seeds. Generated scenarios
 are drawn from the held-out test split of satellites and close-call shapes.
 
+## Frozen benchmark
+
+Held-out episodes are generated from the evaluation configuration, so changing the
+training mix would also change the test set and break comparisons between trials.
+`configs/eval_stage{1,2,3}.json` therefore hold the scenario generator settings
+fixed and are the configurations to evaluate against; the `mappo_stage*` configs
+may widen the training mix freely.
+
+```sh
+.venv/bin/oz evaluate --config configs/eval_stage2.json \
+  --policy rule --policy final=runs/<run>/checkpoints/latest.pt --episodes 20
+```
+
+Every evaluation includes the rule as a control: it reads none of the changed
+features, so reproducing its numbers confirms the benchmark itself has not moved.
+
 ## Output
 
 | File | Contents |

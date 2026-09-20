@@ -75,6 +75,19 @@ def test_potential_uses_the_worst_valid_approaching_threat() -> None:
     assert threat_potentials(observation((0.0, 0.0, False)), SAFE)[0] == 0.0
 
 
+def test_potential_previews_the_flat_penalty_for_a_threat_just_inside_the_threshold() -> None:
+    config = RewardConfig(close_approach_penalty=-30.0, close_approach_flat_penalty=-10.0, shaping_weight=30.0)
+    mild = observation((968.0, 300.0, True))
+
+    potential = threat_potentials(mild, SAFE, config)[0]
+
+    assert potential == pytest.approx(-(0.032 + 1 / 3), abs=1e-6)
+    assert threat_potentials(observation((1_001.0, 300.0, True)), SAFE, config)[0] == 0.0
+    assert config.shaping_weight * -potential == pytest.approx(
+        -(config.close_approach_flat_penalty + config.close_approach_penalty * 0.032), abs=1e-6
+    )
+
+
 def test_quiet_coasting_earns_nothing() -> None:
     assert reward() == 0.0
 
