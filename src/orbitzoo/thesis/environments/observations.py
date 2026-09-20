@@ -31,13 +31,15 @@ class ObservationState:
     global_state: np.ndarray
 
 
-def normalized_miss_vector(miss_vector: np.ndarray, safe_separation_meters: float) -> np.ndarray:
-    """Miss vector components in units of the safe separation, clipped like the miss distance."""
-    return np.clip(
-        np.asarray(miss_vector, dtype=float) / safe_separation_meters,
-        -MAX_NORMALIZED_MISS_DISTANCE,
-        MAX_NORMALIZED_MISS_DISTANCE,
-    ).astype(np.float32)
+def miss_direction(miss_vector: np.ndarray) -> np.ndarray:
+    """Unit vector pointing where the threat passes; zero when the miss vector is degenerate.
+
+    The miss distance itself is a separate feature, so the direction carries full magnitude even
+    for a very close conjunction. See docs/COLLISION_AVOIDANCE_ENVIRONMENT.md.
+    """
+    vector = np.asarray(miss_vector, dtype=float)
+    norm = np.linalg.norm(vector, axis=-1, keepdims=True)
+    return np.divide(vector, norm, out=np.zeros_like(vector), where=norm > 1e-9).astype(np.float32)
 
 
 def fuel_fraction(body: Any, maneuverable_names: set[str]) -> float:
@@ -152,7 +154,7 @@ class LocalObservationEncoder:
                     ],
                     dtype=np.float32,
                 ),
-                normalized_miss_vector(miss_vector, self.safety_config.safe_separation_meters),
+                miss_direction(miss_vector),
             )
         )
 

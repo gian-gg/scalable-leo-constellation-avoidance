@@ -22,7 +22,7 @@ satellite's normalized Cartesian position (3), velocity (3), and fuel fraction
 (1), followed by `k` threat-ranked neighbour blocks. Each neighbour block holds
 relative RSW position and velocity, time to closest approach, predicted miss
 distance, combined radius, maneuverability, fuel fraction, a validity mask, and
-the predicted miss vector at closest approach.
+the direction in which the threat is predicted to pass.
 Missing neighbours are zero-padded. The actor width is therefore `7 + 15k` and
 does not depend on constellation size.
 
@@ -38,7 +38,12 @@ The feature order for one neighbour block is:
 | maneuverable flag | 1 | binary |
 | fuel fraction | 1 | initial fuel |
 | valid mask | 1 | binary |
-| predicted miss vector (radial, along-track, cross-track) | 3 | safe separation, each clipped to ±10 |
+| predicted miss direction (radial, along-track, cross-track) | 3 | unit vector, zero when degenerate |
+
+The miss direction is a unit vector rather than the scaled miss vector, because
+the distance is already a separate feature and a scaled vector fades toward zero
+in exactly the tight conjunctions where its sign decides the burn. See
+[TRAINING_TRIALS.md](TRAINING_TRIALS.md).
 
 Candidate neighbours include both maneuvering satellites and debris. They are
 ranked deterministically by collision status, unsafe-conjunction status, predicted

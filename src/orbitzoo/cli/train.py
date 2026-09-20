@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 from pathlib import Path
 import sys
 
@@ -19,6 +20,9 @@ def train(args: argparse.Namespace) -> None:
             config = ExperimentConfig.load(run_directory / "config.json")
         else:
             config = ExperimentConfig.load(Path(args.config).expanduser())
+            if args.initial_actor is not None:
+                checkpoint = args.initial_actor or None
+                config = replace(config, training=replace(config.training, initial_actor_checkpoint=checkpoint))
             run_directory = (
                 initialize_run_directory(Path(args.output).expanduser(), config)
                 if args.output
@@ -55,6 +59,10 @@ def add_train_parser(subparsers: argparse._SubParsersAction) -> None:
     command.add_argument(
         "--output",
         help="new run directory; existing paths are refused (default: runs/<timestamp>_mappo_seed<N>)",
+    )
+    command.add_argument(
+        "--initial-actor",
+        help="override the config's starting actor checkpoint; pass an empty string to start fresh",
     )
     command.add_argument(
         "--resume",

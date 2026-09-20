@@ -6,7 +6,13 @@
 ```sh
 .venv/bin/oz train --config configs/mappo_smoke.json --output runs/mappo_smoke
 .venv/bin/oz train --resume runs/mappo_smoke
+.venv/bin/oz train --config configs/mappo_stage2.json --output runs/alt_stage2 \
+  --initial-actor runs/alt_stage1/checkpoints/latest.pt
 ```
+
+`--initial-actor` overrides the configured starting checkpoint, so a curriculum
+variant can chain into its own run directories without editing the stage configs;
+an empty string starts from a fresh actor.
 
 Without `--output`, a new directory `runs/<timestamp>_mappo_seed<N>` is created.
 Existing output paths are refused. `--resume` reads `config.json` from the run

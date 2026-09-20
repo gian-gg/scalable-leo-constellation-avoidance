@@ -69,6 +69,45 @@ approaches (76%) with 1.02 m/s.
 The actor also agreed with the rule's chosen direction only 49% of the time, and
 coasted on 29% of flagged threats, preferring one default direction.
 
+## Trial 7 — unit miss direction, stages 1-2
+
+A diagnosis of the trained actor (see
+[TRAINING_RESULTS.md](TRAINING_RESULTS.md)) found that satellite pairs failed when
+both satellites burned the same way: opposite-direction burns cleared 417 of 418
+conjunctions, same-direction burns 2 of 18. The cause was the miss-direction
+feature, which was stored scaled by the miss vector and so shrank to a median
+magnitude of 0.36 in those encounters against 0.71 in the ones that worked, while
+the two observations stayed distinguishable (median L2 distance 1.51). The actor
+fell back to one default burn.
+
+The feature became a unit vector; the miss distance was already separate, so
+nothing was lost. Stages 1 and 2 were retrained into `runs/sym_stage{1,2}` and
+evaluated on the same 20 held-out stage-2 scenarios. The rule reproduced its
+earlier numbers exactly, which confirms the comparison.
+
+| Pair outcome (240 encounters) | Before | After |
+| --- | ---: | ---: |
+| Same direction | 18 (11% cleared) | **0** |
+| Opposite | 418 (99.8% cleared) | 185 (95% cleared) |
+| One satellite only | 56 | 36 (100% cleared) |
+| Neither burned | 1 | **19 (0% cleared)** |
+
+| Metric, 64 agents | Trial 6 actor | Rule | Trial 7 actor |
+| --- | ---: | ---: | ---: |
+| Close approaches | 4.00 | 4.30 | 4.10 |
+| Closest (m) | 182.9 | 289.1 | **420.0** |
+| Mean shortfall | 0.235 | 0.169 | **0.128** |
+| Delta-v (m/s) | 0.847 | 0.676 | 0.815 |
+| Slot drift (m) | 3,225 | 3,681 | 3,860 |
+
+Double threats rose from 86% to 89% and debris from 92% to 94%. The remaining
+close approaches are much shallower: the worst case beats the rule and the mean
+shortfall is the lowest of the three.
+
+The regression is 19 pair encounters where neither satellite burned, at a median
+planned miss of 968 m. These are the mild conjunctions of trial 5 returning, and
+they are the target of the next reward change rather than of this feature.
+
 ## Decision
 
 The stage configurations (`configs/mappo_stage{1,2,3}.json`) adopt variant B:

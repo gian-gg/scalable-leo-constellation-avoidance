@@ -160,8 +160,10 @@ macOS 26.0 on Apple M1.
 - **Twenty episodes per size.** Differences of a few tenths of a close approach per
   episode are within noise; more episodes would tighten the comparison.
 - **Paired maneuvers.** When both satellites of a pair maneuver, the actor resolves
-  77–83% against the rule's 96–100%, because near-mirror observations make the shared
-  policy pick the same burn direction for both satellites.
+  77–83% against the rule's 96–100%, because the scaled miss-direction feature faded
+  in tight conjunctions and the policy fell back to one default burn. Fixed after this
+  run by making the feature a unit vector; see trial 7 in
+  [TRAINING_TRIALS.md](TRAINING_TRIALS.md). The numbers above predate that change.
 - **Short warning.** Threats first flagged 5–10 minutes ahead are cleared 75% of the
   time against the rule's 80%.
 - **Worst case.** Closest approaches of 183–211 m remain at the larger sizes for both

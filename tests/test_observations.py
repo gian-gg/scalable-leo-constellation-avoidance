@@ -148,4 +148,21 @@ def test_neighbor_block_ends_with_the_predicted_miss_direction() -> None:
 
     miss = encoder.encode(bodies, ["agent"]).local_observations[0, OWN_FEATURE_DIM + 12 : OWN_FEATURE_DIM + 15]
 
-    assert np.allclose(miss, [0.3, 0.0, 0.0], atol=1e-6)
+    assert np.allclose(miss, [1.0, 0.0, 0.0], atol=1e-6)
+
+
+def test_miss_direction_keeps_full_magnitude_for_a_very_close_conjunction() -> None:
+    config = SafetyConfig(safe_separation_meters=1_000.0, screening_horizon_seconds=1_800.0, threat_prediction="linear")
+    encoder = LocalObservationEncoder(neighborhood_size=1, safety_config=config)
+
+    def direction(radial_offset: float) -> np.ndarray:
+        bodies = [
+            body("agent", [7_000_000, 0, 0], [0, 7_500, 0], fuel=1, initial_fuel=1),
+            body("threat", [7_000_000 + radial_offset, 5_000, 0], [0, 7_490, 0]),
+        ]
+        return encoder.encode(bodies, ["agent"]).local_observations[
+            0, OWN_FEATURE_DIM + 12 : OWN_FEATURE_DIM + 15
+        ]
+
+    assert np.allclose(direction(30.0), direction(300.0), atol=1e-6)
+    assert np.allclose(direction(-300.0), -direction(300.0), atol=1e-6)
