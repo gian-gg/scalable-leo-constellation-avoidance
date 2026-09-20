@@ -43,6 +43,32 @@ All three used entropy coefficient 0.05 and actor learning rate 1e-4.
 Only B learned to avoid: it resolved 77% of the no-op close calls after 60 updates,
 against 95% for the rule, using about twice the rule's delta-v.
 
+## Trial 4 — variant B for a full stage 1, 125 updates
+
+Improvement flattened after about update 70. Evaluated: 2.40 close approaches per
+episode (72% of the no-op total resolved) with 0.83 m/s per agent — slightly fewer
+resolved than trial 3B but cheaper, so the extra updates traded safety for fuel.
+One crash (a satellite whose TLE could not be propagated to the drawn epoch) was
+fixed by redrawing the scenario, and the run resumed from its checkpoint.
+
+## Trial 5 — adding the predicted miss direction, 125 updates
+
+Three features were added to each neighbour block: the predicted miss vector at
+closest approach. Learning started 5–10 updates earlier, and the close approaches it
+failed to clear were much milder (closest 212 m against 63 m, mean shortfall 0.16
+against 0.25, 0.68 m/s), but it resolved slightly fewer of them (68%).
+
+## Trial 6 — adding a flat penalty per close approach, 125 updates
+
+A diagnosis of trial 5 found the actor ignored *mild* conjunctions: of 46 close
+approaches the rule cleared and the actor did not, it never maneuvered in 24, and
+their planned miss was about 770 m. A flat −10 for any close approach under 1 km was
+added so that even a shallow one outweighs a 0.5 m/s burn. Evaluated: 2.05 close
+approaches (76%) with 1.02 m/s.
+
+The actor also agreed with the rule's chosen direction only 49% of the time, and
+coasted on 29% of flagged threats, preferring one default direction.
+
 ## Decision
 
 The stage configurations (`configs/mappo_stage{1,2,3}.json`) adopt variant B:
@@ -55,6 +81,7 @@ The stage configurations (`configs/mappo_stage{1,2,3}.json`) adopt variant B:
 | `rewards.delta_v_penalty_per_mps` | 1 (unchanged) |
 | `training.entropy_coefficient` | 0.05 |
 | `training.actor_learning_rate` | 1e-4 |
+| `rewards.close_approach_flat_penalty` | −10 (trial 6) |
 
 With these weights a 500 m close approach costs 15 and one 0.5 m/s burn costs 0.5,
 so a successful avoidance clearly outweighs its fuel, while a collision still costs
@@ -66,3 +93,6 @@ more than any near miss.
   seed variance.
 - The weights were chosen from three variants, not a full sensitivity analysis.
 - Trials 2 and 3 ran for 60 updates, about half of stage 1.
+- Stage-1 performance plateaued at 72–77% in trials 3–6; the gap to the rule closed
+  only after stages 2 and 3, so stage-1 trials are a poor predictor of final quality.
+  See [TRAINING_RESULTS.md](TRAINING_RESULTS.md).
