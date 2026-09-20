@@ -88,6 +88,47 @@ a conjunction with one satellite maneuvering alone, and every such case was reso
 rule (34/41 and 61/79 against 40/40 and 72/75), which is the clearest remaining
 weakness.
 
+## Diagnosis of the remaining close approaches
+
+Every planned conjunction under 1 km in the held-out episodes was replayed under both
+policies and recorded with its situation type, warning time, relative speed, planned
+miss and the actions both satellites took (`runs/trials/09_diagnosis.json`, 3,860
+records: 20 episodes at 64 agents, 10 at 150).
+
+| Category | Rule cleared | Actor cleared |
+| --- | ---: | ---: |
+| Debris (single threat) | 93% | 92% |
+| Double threat | 79% | **84%** |
+| Satellite pair | **99%** | 96% |
+| Planned miss under 200 m | 63% | **76%** |
+| Planned miss 500–1000 m | 96% | 95% |
+| Flagged 5–10 min ahead | **80%** | 75% |
+| Flagged over 10 min ahead | 92% | **94%** |
+
+(150 agents; the 64-agent table has the same shape.)
+
+The actor is better on the hard cases — two simultaneous threats and deep conjunctions
+— and worse on short warning and on satellite pairs. Failures are not caused by
+coasting: the actor burned in all but 3 of its 106 failures, and burned *more* often
+than the rule on average (2.79 against 2.16 decision steps).
+
+### Root cause of the paired-maneuver weakness
+
+Splitting satellite-to-satellite conjunctions by the two satellites' first burns:
+
+| First burns | Count | Cleared |
+| --- | ---: | ---: |
+| Opposite directions | 418 | 417 (99.8%) |
+| Same direction | 18 | 2 (11%) |
+
+The rule picks opposite directions in 280 of 290 pairs because each satellite signs its
+burn by its own miss vector. The shared actor picks the same direction in 18 cases, and
+those are almost the whole paired-maneuver deficit: 9 of its 12 pair failures at 150
+agents are both satellites burning −S. They happen on tighter conjunctions (median
+planned miss 316 m against 619 m) where the two observations are closest to mirror
+images of each other, so one shared policy maps them to one shared action and the two
+burns cancel.
+
 ## Comparison with the trials
 
 Stage 1 alone plateaued at 72–77% of close approaches resolved (trials 3–6). The same
@@ -119,10 +160,10 @@ macOS 26.0 on Apple M1.
 - **Twenty episodes per size.** Differences of a few tenths of a close approach per
   episode are within noise; more episodes would tighten the comparison.
 - **Paired maneuvers.** When both satellites of a pair maneuver, the actor resolves
-  77–83% against the rule's 96–100%.
-- **Remaining close approaches.** About 10% of no-op conjunctions still occur under
-  both policies; which encounters these are has not yet been diagnosed at 64 and 150
-  agents.
+  77–83% against the rule's 96–100%, because near-mirror observations make the shared
+  policy pick the same burn direction for both satellites.
+- **Short warning.** Threats first flagged 5–10 minutes ahead are cleared 75% of the
+  time against the rule's 80%.
 - **Worst case.** Closest approaches of 183–211 m remain at the larger sizes for both
   policies.
 - **Scale not yet measured.** The real-catalog sweeps (`oz scale`, up to 20,000
